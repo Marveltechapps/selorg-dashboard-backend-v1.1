@@ -1,0 +1,485 @@
+const User = require('../models/User');
+const Role = require('../models/Role');
+const bcrypt = require('bcryptjs');
+const logger = require('../../core/utils/logger');
+
+/**
+ * Get all users
+ */
+const getUsers = async (req, res, next) => {
+  try {
+    const { status, roleId, department, search } = req.query;
+    
+    const filter = {};
+    if (status) filter.status = status;
+    if (roleId) filter.roleId = roleId;
+    if (department) filter.department = department;
+    if (search) {
+      filter.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
+      ];
+    }
+
+    const users = await User.find(filter)
+      .populate('roleId', 'name description accessScope')
+      .populate('reportingManagerId', 'name email')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const usersWithRole = users.map(user => {
+      const role = user.roleId;
+      return {
+        ...user,
+        id: user._id.toString(),
+        roleName: role?.name,
+        accessLevel: role?.accessScope === 'global' ? 'Full Access' : 
+                     role?.accessScope === 'zone' ? 'Zone Limited' : 'Store Limited',
+      };
+    });
+
+    res.json({
+      success: true,
+      data: usersWithRole,
+      meta: {
+        requestId: req.id,
+        timestamp: new Date().toISOString(),
+      },
+    });
+  } catch (error) {
+    logger.error('Error fetching users', {
+      error: error.message,
+      stack: error.stack,
+      requestId: req.id,
+    });
+    next(error);
+  }
+};
+
+/**
+ * Get user by ID
+ */
+const getUserById = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const user = await User.findById(id)
+      .populate('roleId', 'name description permissions accessScope')
+      .populate('reportingManagerId', 'name email')
+      .lean();
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          code: 'USER_NOT_FOUND',
+          message: 'User not found',
+        },
+        meta: {
+          requestId: req.id,
+          timestamp: new Date().toISOString(),
+        },
+      });
+    }
+
+    const role = user.roleId;
+    res.json({
+      success: true,
+      data: {
+        ...user,
+        id: user._id.toString(),
+        roleName: role?.name,
+        accessLevel: role?.accessScope === 'global' ? 'Full Access' : 
+                     role?.accessScope === 'zone' ? 'Zone Limited' : 'Store Limited',
+      },
+      meta: {
+        requestId: req.id,
+        timestamp: new Date().toISOString(),
+      },
+    });
+  } catch (error) {
+    logger.error('Error fetching user', {
+      error: error.message,
+      stack: error.stack,
+      requestId: req.id,
+    });
+    next(error);
+  }
+};
+
+/**
+ * Create new user
+ */
+const createUser = async (req, res, next) => {
+  try {
+    const {
+      email,
+      password,
+      name,
+      department,
+      roleId,
+      reportingManagerId,
+      location,
+      twoFactorEnabled,
+      startDate,
+      notes,
+    } = req.body;
+
+    // Validate required fields
+    if (!email || !password || !name) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Email, password, and name are required',
+        },
+        meta: {
+          requestId: req.id,
+          timestamp: new Date().toISOString(),
+        },
+      });
+    }
+
+    // Check if user already exists
+    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    if (existingUser) {
+      return res.status(409).json({
+        success: false,
+        error: {
+          code: 'USER_EXISTS',
+          message: 'User with this email already exists',
+        },
+        meta: {
+          requestId: req.id,
+          timestamp: new Date().toISOString(),
+        },
+      });
+    }
+
+    // Validate role if provided
+    let role = null;
+    if (roleId) {
+      role = await Role.findById(roleId);
+      if (!role) {
+        return res.status(404).json({
+          success: false,
+          error: {
+            code: 'ROLE_NOT_FOUND',
+            message: 'Role not found',
+          },
+          meta: {
+            requestId: req.id,
+            timestamp: new Date().toISOString(),
+          },
+        });
+      }
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const userData = {
+      email: email.toLowerCase(),
+      password: hashedPassword,
+      name,
+      department: department || '',
+      roleId: roleId || null,
+      role: role?.name || null,
+      permissions: role?.permissions || [],
+      reportingManagerId: reportingManagerId || null,
+      location: location || [],
+      twoFactorEnabled: twoFactorEnabled || false,
+      startDate: startDate ? new Date(startDate) : new Date(),
+      notes: notes || '',
+      status: 'active',
+    };
+
+    const user = await User.create(userData);
+    const userObj = user.toObject();
+    userObj.id = userObj._id.toString();
+    delete userObj._id;
+    delete userObj.__v;
+    delete userObj.password;
+
+    logger.info('User created', {
+      userId: user._id.toString(),
+      email: user.email,
+      createdBy: req.user?.userId,
+      requestId: req.id,
+    });
+
+    res.status(201).json({
+      success: true,
+      data: {
+        ...userObj,
+        roleName: role?.name,
+        accessLevel: role?.accessScope === 'global' ? 'Full Access' : 
+                     role?.accessScope === 'zone' ? 'Zone Limited' : 'Store Limited',
+      },
+      meta: {
+        requestId: req.id,
+        timestamp: new Date().toISOString(),
+      },
+    });
+  } catch (error) {
+    logger.error('Error creating user', {
+      error: error.message,
+      stack: error.stack,
+      requestId: req.id,
+    });
+    next(error);
+  }
+};
+
+/**
+ * Update user
+ */
+const updateUser = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const {
+      name,
+      department,
+      roleId,
+      status,
+      reportingManagerId,
+      location,
+      notes,
+    } = req.body;
+
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          code: 'USER_NOT_FOUND',
+          message: 'User not found',
+        },
+        meta: {
+          requestId: req.id,
+          timestamp: new Date().toISOString(),
+        },
+      });
+    }
+
+    // Validate role if provided
+    let role = null;
+    if (roleId && roleId !== user.roleId?.toString()) {
+      role = await Role.findById(roleId);
+      if (!role) {
+        return res.status(404).json({
+          success: false,
+          error: {
+            code: 'ROLE_NOT_FOUND',
+            message: 'Role not found',
+          },
+          meta: {
+            requestId: req.id,
+            timestamp: new Date().toISOString(),
+          },
+        });
+      }
+    }
+
+    // Update fields
+    if (name) user.name = name;
+    if (department !== undefined) user.department = department;
+    if (roleId) {
+      user.roleId = roleId;
+      user.role = role?.name || null;
+      user.permissions = role?.permissions || [];
+    }
+    if (status) user.status = status;
+    if (reportingManagerId !== undefined) user.reportingManagerId = reportingManagerId;
+    if (location !== undefined) user.location = location;
+    if (notes !== undefined) user.notes = notes;
+
+    await user.save();
+
+    const userObj = user.toObject();
+    userObj.id = userObj._id.toString();
+    delete userObj._id;
+    delete userObj.__v;
+    delete userObj.password;
+
+    const updatedRole = await Role.findById(user.roleId);
+
+    logger.info('User updated', {
+      userId: id,
+      updatedBy: req.user?.userId,
+      requestId: req.id,
+    });
+
+    res.json({
+      success: true,
+      data: {
+        ...userObj,
+        roleName: updatedRole?.name,
+        accessLevel: updatedRole?.accessScope === 'global' ? 'Full Access' : 
+                     updatedRole?.accessScope === 'zone' ? 'Zone Limited' : 'Store Limited',
+      },
+      meta: {
+        requestId: req.id,
+        timestamp: new Date().toISOString(),
+      },
+    });
+  } catch (error) {
+    logger.error('Error updating user', {
+      error: error.message,
+      stack: error.stack,
+      requestId: req.id,
+    });
+    next(error);
+  }
+};
+
+/**
+ * Delete user
+ */
+const deleteUser = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          code: 'USER_NOT_FOUND',
+          message: 'User not found',
+        },
+        meta: {
+          requestId: req.id,
+          timestamp: new Date().toISOString(),
+        },
+      });
+    }
+
+    await User.findByIdAndDelete(id);
+
+    logger.info('User deleted', {
+      userId: id,
+      email: user.email,
+      deletedBy: req.user?.userId,
+      requestId: req.id,
+    });
+
+    res.json({
+      success: true,
+      message: 'User deleted successfully',
+      meta: {
+        requestId: req.id,
+        timestamp: new Date().toISOString(),
+      },
+    });
+  } catch (error) {
+    logger.error('Error deleting user', {
+      error: error.message,
+      stack: error.stack,
+      requestId: req.id,
+    });
+    next(error);
+  }
+};
+
+/**
+ * Assign role to user
+ */
+const assignRole = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { roleId } = req.body;
+
+    if (!roleId) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'roleId is required',
+        },
+        meta: {
+          requestId: req.id,
+          timestamp: new Date().toISOString(),
+        },
+      });
+    }
+
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          code: 'USER_NOT_FOUND',
+          message: 'User not found',
+        },
+        meta: {
+          requestId: req.id,
+          timestamp: new Date().toISOString(),
+        },
+      });
+    }
+
+    const role = await Role.findById(roleId);
+    if (!role) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          code: 'ROLE_NOT_FOUND',
+          message: 'Role not found',
+        },
+        meta: {
+          requestId: req.id,
+          timestamp: new Date().toISOString(),
+        },
+      });
+    }
+
+    user.roleId = roleId;
+    user.role = role.name;
+    user.permissions = role.permissions;
+    await user.save();
+
+    const userObj = user.toObject();
+    userObj.id = userObj._id.toString();
+    delete userObj._id;
+    delete userObj.__v;
+    delete userObj.password;
+
+    logger.info('Role assigned to user', {
+      userId: id,
+      roleId,
+      assignedBy: req.user?.userId,
+      requestId: req.id,
+    });
+
+    res.json({
+      success: true,
+      data: {
+        ...userObj,
+        roleName: role.name,
+        accessLevel: role.accessScope === 'global' ? 'Full Access' : 
+                     role.accessScope === 'zone' ? 'Zone Limited' : 'Store Limited',
+      },
+      meta: {
+        requestId: req.id,
+        timestamp: new Date().toISOString(),
+      },
+    });
+  } catch (error) {
+    logger.error('Error assigning role', {
+      error: error.message,
+      stack: error.stack,
+      requestId: req.id,
+    });
+    next(error);
+  }
+};
+
+module.exports = {
+  getUsers,
+  getUserById,
+  createUser,
+  updateUser,
+  deleteUser,
+  assignRole,
+};
