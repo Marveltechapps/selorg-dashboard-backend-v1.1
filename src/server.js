@@ -1,6 +1,9 @@
 // Load env vars FIRST before any other requires
+const path = require('path');
 const dotenv = require('dotenv');
-dotenv.config();
+
+// Load .env from Backend root so it works when run from Backend/ or Backend/src/
+dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
 
 const express = require('express');
 const cors = require('cors');
