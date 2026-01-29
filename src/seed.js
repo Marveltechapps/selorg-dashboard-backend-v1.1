@@ -1,10 +1,31 @@
 const mongoose = require('mongoose');
 const dotenv = require('dotenv');
+<<<<<<< HEAD
 const bcrypt = require('bcryptjs');
 
 // Import User model (shared across all dashboards)
 const User = require('./vendor/models/User');
 const logger = require('./core/utils/logger');
+=======
+
+// Import models from their respective dashboards
+const Alert = require('./darkstore/models/Alert'); // Darkstore Alert (different from merch Alert)
+const Allocation = require('./merch/models/Allocation'); // Moved from warehouse to merch
+const AnalyticsRecord = require('./merch/models/AnalyticsRecord'); // Moved from admin to merch
+const ApprovalRequest = require('./merch/models/ApprovalRequest'); // Moved from admin to merch
+const AuditLog = require('./common-models/AuditLog');
+const Campaign = require('./merch/models/Campaign');
+const Collection = require('./merch/models/Collection'); // Moved from admin to merch
+const PriceChange = require('./merch/models/PriceChange'); // Moved from admin to merch
+const PromoUplift = require('./merch/models/PromoUplift');
+const ReplenishmentAlert = require('./merch/models/ReplenishmentAlert'); // Moved from warehouse to merch
+const SKU = require('./merch/models/SKU'); // Moved from admin to merch
+const StockConflict = require('./merch/models/StockConflict');
+const Store = require('./merch/models/Store'); // Moved from admin to merch
+const SurgeRule = require('./merch/models/SurgeRule'); // Moved from admin to merch
+const Zone = require('./merch/models/Zone');
+const logger = require('./core/utils/logger'); // Moved from admin to merch
+>>>>>>> 6591dc33a9b88417e6a52adeaff72e27b1dee13a
 
 // Load environment variables
 dotenv.config();
@@ -24,11 +45,16 @@ const connectDB = async () => {
   }
 };
 
+<<<<<<< HEAD
 // Seed function - Creates login users for all dashboards
+=======
+// Seed function
+>>>>>>> 6591dc33a9b88417e6a52adeaff72e27b1dee13a
 const seed = async () => {
   try {
     await connectDB();
     
+<<<<<<< HEAD
     // Default password for all users (change in production!)
     const defaultPassword = 'password123';
     const hashedPassword = await bcrypt.hash(defaultPassword, 10);
@@ -134,6 +160,17 @@ const seed = async () => {
   } catch (err) {
     logger.error('Seed error:', err);
     await mongoose.connection.close();
+=======
+    // Add your seed data here
+    // Example:
+    // await SKU.insertMany([...]);
+    // await Campaign.insertMany([...]);
+    
+    logger.info('Seed data inserted successfully');
+    process.exit(0);
+  } catch (err) {
+    logger.error('Seed error:', err);
+>>>>>>> 6591dc33a9b88417e6a52adeaff72e27b1dee13a
     process.exit(1);
   }
 };

@@ -6,7 +6,10 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
+<<<<<<< HEAD
     "seed": "node src/seed.js",
+=======
+>>>>>>> 6591dc33a9b88417e6a52adeaff72e27b1dee13a
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",

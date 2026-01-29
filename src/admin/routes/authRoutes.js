@@ -1,6 +1,11 @@
 const express = require('express');
+<<<<<<< HEAD
 // Use admin-specific auth service that includes permissions
 const authService = require('../services/authService');
+=======
+// Reuse vendor auth service (same User model)
+const authService = require('../../vendor/services/authService');
+>>>>>>> 6591dc33a9b88417e6a52adeaff72e27b1dee13a
 
 const router = express.Router();
 
@@ -17,6 +22,7 @@ router.post('/register', async (req, res, next) => {
 router.post('/login', async (req, res, next) => {
   try {
     const { email, password, role } = req.body;
+<<<<<<< HEAD
     console.log('Login request:', { email, role: role || 'admin' });
     
     if (!email || !password) {
@@ -40,6 +46,12 @@ router.post('/login', async (req, res, next) => {
     res.json(result);
   } catch (err) {
     console.error('Login error:', err);
+=======
+    const result = await authService.authenticateUser(email, password, role || 'admin');
+    if (!result) return res.status(401).json({ code: 401, message: 'Invalid credentials' });
+    res.json(result);
+  } catch (err) {
+>>>>>>> 6591dc33a9b88417e6a52adeaff72e27b1dee13a
     next(err);
   }
 });

@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 const express = require('express');
 const router = express.Router();
 const { getAvailablePickers } = require('../controllers/pickerController');
@@ -7,3 +8,14 @@ router.get('/available', getAvailablePickers);
 
 module.exports = router;
 
+=======
+const express = require('express');
+const router = express.Router();
+const { getAvailablePickers } = require('../controllers/pickerController');
+
+// GET /api/darkstore/pickers/available
+router.get('/available', getAvailablePickers);
+
+module.exports = router;
+
+>>>>>>> 6591dc33a9b88417e6a52adeaff72e27b1dee13a
