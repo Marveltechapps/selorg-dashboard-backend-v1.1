@@ -5,6 +5,15 @@ const dotenv = require('dotenv');
 // Load .env from Backend root so it works when run from Backend/ or Backend/src/
 dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
 
+// Catch crashes early so the error is always visible in the terminal
+process.on('unhandledRejection', (err) => {
+  console.error('\n[Unhandled Rejection]', err?.message, err?.stack, '\n');
+});
+process.on('uncaughtException', (err) => {
+  console.error('\n[Uncaught Exception]', err?.message, err?.stack, '\n');
+  process.exit(1);
+});
+
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -37,11 +46,12 @@ if (process.env.NODE_ENV !== 'test') {
     validateJWTSecret();
   } catch (error) {
     logger.error('Startup validation failed', { error: error.message });
+    console.error('\n[Startup validation failed]', error.message, '\n');
     process.exit(1);
   }
 
-  // Connect to database
-  connectDB();
+  // Connect to database (non-blocking; failures are logged in db.js, no unhandled rejection)
+  connectDB().catch(() => {});
 }
 
 const app = express();
@@ -183,20 +193,12 @@ if (process.env.NODE_ENV !== 'test') {
     logger.info('WebSocket server initialized');
   }).on('error', (err) => {
     if (err.code === 'EADDRINUSE') {
-      logger.error('Port already in use', {
-        port: PORT,
-        error: err.message,
-        suggestion: `Port ${PORT} is already in use. Please either:
-          1. Stop the process using port ${PORT}
-          2. Set a different PORT in your .env file (e.g., PORT=5001)
-          3. Kill the process: lsof -ti:${PORT} | xargs kill -9`,
-      });
+      logger.error('Port already in use', { port: PORT, error: err.message });
+      console.error(`\n[Server error] Port ${PORT} is already in use. Set PORT=5001 in .env or stop the other process.\n`);
       process.exit(1);
     } else {
-      logger.error('Server startup error', {
-        error: err.message,
-        stack: err.stack,
-      });
+      logger.error('Server startup error', { error: err.message, stack: err.stack });
+      console.error('\n[Server startup error]', err.message, '\n');
       process.exit(1);
     }
   });
@@ -213,22 +215,7 @@ process.on('unhandledRejection', (err, promise) => {
 
 // Handle uncaught exceptions
 process.on('uncaughtException', (err) => {
-  // Special handling for port conflicts
-  if (err.code === 'EADDRINUSE') {
-    logger.error('Port conflict detected', {
-      error: err.message,
-      port: PORT,
-      suggestion: `Port ${PORT} is already in use. Please either:
-        1. Stop the process using port ${PORT}: lsof -ti:${PORT} | xargs kill -9
-        2. Set a different PORT in your .env file (e.g., PORT=5001)
-        3. Wait for the port to become available`,
-    });
-  } else {
-    logger.error('Uncaught Exception', {
-      error: err.message,
-      stack: err.stack,
-    });
-  }
-  // Exit process for uncaught exceptions (server is in undefined state)
+  logger.error('Uncaught Exception', { error: err.message, stack: err.stack });
+  console.error('\n[Uncaught Exception]', err.message, err.stack, '\n');
   process.exit(1);
 });

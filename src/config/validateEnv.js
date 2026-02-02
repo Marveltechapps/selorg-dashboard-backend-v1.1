@@ -44,14 +44,31 @@ const validateJWTSecret = (secret) => {
   return { valid: true };
 };
 
+/** Dev-only default JWT secret (32+ chars) - never use in production */
+const DEV_JWT_SECRET = 'selorg-dev-secret-do-not-use-in-production-32ch';
+
 /**
  * Validates all required environment variables
  */
 const validateEnvironment = () => {
   const errors = [];
   const warnings = [];
+  const isDev = process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'test';
 
-  // Required variables
+  // In development, set defaults so server can start without .env
+  if (isDev) {
+    if (!process.env.MONGO_URI && !process.env.MONGODB_URI) {
+      process.env.MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/selorg-admin-ops';
+      warnings.push('MONGO_URI not set - using default (mongodb://127.0.0.1:27017/selorg-admin-ops). Set in .env for production.');
+    }
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret || jwtSecret.length < 32) {
+      process.env.JWT_SECRET = DEV_JWT_SECRET;
+      warnings.push('JWT_SECRET missing or too short - using dev default. Set a strong JWT_SECRET in .env for production.');
+    }
+  }
+
+  // Required variables (after dev defaults)
   const required = ['MONGO_URI', 'JWT_SECRET'];
   
   for (const key of required) {
