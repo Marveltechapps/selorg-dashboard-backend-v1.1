@@ -1,0 +1,103 @@
+name: Deploy Selorg Dashboard Backend (Rollback Safe)
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy Backend to EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: ${{ secrets.EC2_PORT }}
+          script: |
+            set -e
+
+            echo "============================="
+            echo "✅ BACKEND DEPLOYMENT STARTED"
+            echo "============================="
+
+            BACKEND_DIR="/root/selorg-dashboard-backend-v1.1"
+            IMAGE_NAME="selorg-dashboard-backend"
+            CONTAINER_NAME="selorg-backend"
+            PORT_MAPPING="5000:5000"
+            ENV_FILE="/root/envs/selorg-api.env"
+
+            cd $BACKEND_DIR
+
+            echo "🧹 Clean repo & pull latest code"
+            git reset --hard
+            git clean -fd
+            git pull origin main
+
+            COMMIT=$(git rev-parse --short HEAD)
+            NEW_IMAGE="${IMAGE_NAME}:${COMMIT}"
+            LATEST_IMAGE="${IMAGE_NAME}:latest"
+            BACKUP_IMAGE="${IMAGE_NAME}:backup"
+
+            echo "✅ Commit: $COMMIT"
+            echo "🐳 New image: $NEW_IMAGE"
+
+            echo "📌 Backup current latest image (if exists)"
+            docker image inspect $LATEST_IMAGE >/dev/null 2>&1 && docker tag $LATEST_IMAGE $BACKUP_IMAGE || true
+
+            echo "🐳 Build new backend image"
+            docker build -t $NEW_IMAGE .
+
+            echo "📌 Tag new image as latest"
+            docker tag $NEW_IMAGE $LATEST_IMAGE
+
+            echo "🛑 Stop & remove old backend container"
+            docker stop $CONTAINER_NAME || true
+            docker rm $CONTAINER_NAME || true
+
+            echo "🚀 Run new backend container"
+            docker run -d \
+              --name $CONTAINER_NAME \
+              --restart always \
+              -p $PORT_MAPPING \
+              --env-file $ENV_FILE \
+              $LATEST_IMAGE
+
+            echo "⏳ Waiting for backend to boot..."
+            sleep 8
+
+            echo "🔍 Health check (http://127.0.0.1:5000/health)"
+            if curl -f http://127.0.0.1:5000/health >/dev/null 2>&1; then
+              echo "✅ Backend deployed successfully!"
+            else
+              echo "❌ Backend failed after deploy. Rolling back..."
+
+              docker logs $CONTAINER_NAME --tail 80 || true
+
+              docker stop $CONTAINER_NAME || true
+              docker rm $CONTAINER_NAME || true
+
+              if docker image inspect $BACKUP_IMAGE >/dev/null 2>&1; then
+                docker tag $BACKUP_IMAGE $LATEST_IMAGE
+                docker run -d \
+                  --name $CONTAINER_NAME \
+                  --restart always \
+                  -p $PORT_MAPPING \
+                  --env-file $ENV_FILE \
+                  $LATEST_IMAGE
+                echo "✅ Rolled back successfully."
+              else
+                echo "⚠️ No backup image found. Manual fix needed."
+                exit 1
+              fi
+            fi
+
+            echo "🧹 Cleanup unused images"
+            docker image prune -af
+
+            echo "============================="
+            echo "✅ BACKEND DEPLOYMENT FINISHED"
+            echo "============================="
