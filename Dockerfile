@@ -1,47 +1,46 @@
-# Multi-stage build for Backend (Node.js + Express)
-# Stage 1: Install dependencies
-FROM node:20-alpine AS dependencies
+# ============================
+# Stage 1: Build Vite app
+# ============================
+FROM node:20-alpine AS build
 
 WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
 
-# Install all dependencies
-RUN npm ci
-
-# Stage 2: Production runtime
-FROM node:20-alpine AS production
-
-WORKDIR /app
-
-# Create non-root user for security
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001
-
-# Copy package files
-COPY package*.json ./
-
-# Install production dependencies only
-RUN npm ci --only=production && \
-    npm cache clean --force
+# Install dependencies
+RUN npm install
 
 # Copy source code
-COPY --from=dependencies /app/node_modules ./node_modules
 COPY . .
 
-# Change ownership to non-root user
-RUN chown -R nodejs:nodejs /app
+# Build the Vite project
+RUN npm run build
 
-# Switch to non-root user
-USER nodejs
 
-# Expose port (default 5000, can be overridden via env)
-EXPOSE 5000
+# ============================
+# Stage 2: Serve with Nginx
+# ============================
+FROM nginx:alpine
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-    CMD node -e "require('http').get('http://localhost:5000/api/v1/shared/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})" || exit 1
+# Remove default nginx content
+RUN rm -rf /usr/share/nginx/html/*
 
-# Start the server (JavaScript - no compilation needed)
-CMD ["node", "src/server.js"]
+# ✅ Copy build output to nginx (your output folder is "build")
+COPY --from=build /app/build /usr/share/nginx/html
+
+# SPA routing support (React Router)
+RUN printf 'server {\n\
+  listen 80;\n\
+  server_name _;\n\
+  root /usr/share/nginx/html;\n\
+  index index.html;\n\
+  location / {\n\
+    try_files $uri $uri/ /index.html;\n\
+  }\n\
+}\n' > /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]
+
