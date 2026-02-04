@@ -14,7 +14,7 @@ jobs:
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
+          username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           port: ${{ secrets.EC2_PORT }}
           script: |
@@ -24,11 +24,11 @@ jobs:
             echo "✅ BACKEND DEPLOYMENT STARTED"
             echo "============================="
 
-            BACKEND_DIR="/root/selorg-dashboard-backend-v1.1"
+            BACKEND_DIR="/home/ubuntu/selorg/selorg-dashboard-backend-v1.1"
             IMAGE_NAME="selorg-dashboard-backend"
             CONTAINER_NAME="selorg-backend"
             PORT_MAPPING="5000:5000"
-            ENV_FILE="/root/envs/selorg-api.env"
+            ENV_FILE="/home/ubuntu/envs/selorg-api.env"
 
             cd $BACKEND_DIR
 
@@ -43,23 +43,22 @@ jobs:
             BACKUP_IMAGE="${IMAGE_NAME}:backup"
 
             echo "✅ Commit: $COMMIT"
-            echo "🐳 New image: $NEW_IMAGE"
 
             echo "📌 Backup current latest image (if exists)"
-            docker image inspect $LATEST_IMAGE >/dev/null 2>&1 && docker tag $LATEST_IMAGE $BACKUP_IMAGE || true
+            sudo docker image inspect $LATEST_IMAGE >/dev/null 2>&1 && sudo docker tag $LATEST_IMAGE $BACKUP_IMAGE || true
 
             echo "🐳 Build new backend image"
-            docker build -t $NEW_IMAGE .
+            sudo docker build -t $NEW_IMAGE .
 
             echo "📌 Tag new image as latest"
-            docker tag $NEW_IMAGE $LATEST_IMAGE
+            sudo docker tag $NEW_IMAGE $LATEST_IMAGE
 
             echo "🛑 Stop & remove old backend container"
-            docker stop $CONTAINER_NAME || true
-            docker rm $CONTAINER_NAME || true
+            sudo docker stop $CONTAINER_NAME || true
+            sudo docker rm $CONTAINER_NAME || true
 
             echo "🚀 Run new backend container"
-            docker run -d \
+            sudo docker run -d \
               --name $CONTAINER_NAME \
               --restart always \
               -p $PORT_MAPPING \
@@ -75,14 +74,14 @@ jobs:
             else
               echo "❌ Backend failed after deploy. Rolling back..."
 
-              docker logs $CONTAINER_NAME --tail 80 || true
+              sudo docker logs $CONTAINER_NAME --tail 80 || true
 
-              docker stop $CONTAINER_NAME || true
-              docker rm $CONTAINER_NAME || true
+              sudo docker stop $CONTAINER_NAME || true
+              sudo docker rm $CONTAINER_NAME || true
 
-              if docker image inspect $BACKUP_IMAGE >/dev/null 2>&1; then
-                docker tag $BACKUP_IMAGE $LATEST_IMAGE
-                docker run -d \
+              if sudo docker image inspect $BACKUP_IMAGE >/dev/null 2>&1; then
+                sudo docker tag $BACKUP_IMAGE $LATEST_IMAGE
+                sudo docker run -d \
                   --name $CONTAINER_NAME \
                   --restart always \
                   -p $PORT_MAPPING \
@@ -96,7 +95,7 @@ jobs:
             fi
 
             echo "🧹 Cleanup unused images"
-            docker image prune -af
+            sudo docker image prune -af
 
             echo "============================="
             echo "✅ BACKEND DEPLOYMENT FINISHED"
