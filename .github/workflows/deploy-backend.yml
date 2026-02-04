@@ -25,6 +25,8 @@ jobs:
             echo "============================="
 
             BACKEND_DIR="/home/ubuntu/selorg/selorg-dashboard-backend-v1.1"
+            LOCAL_DOCKERFILE="/home/ubuntu/dockerfiles/Dockerfile.backend"
+
             IMAGE_NAME="selorg-dashboard-backend"
             CONTAINER_NAME="selorg-backend"
             PORT_MAPPING="5000:5000"
@@ -49,8 +51,8 @@ jobs:
             echo "📌 Backup current latest image (if exists)"
             sudo docker image inspect $LATEST_IMAGE >/dev/null 2>&1 && sudo docker tag $LATEST_IMAGE $BACKUP_IMAGE || true
 
-            echo "🐳 Build new backend image"
-            sudo docker build -t $NEW_IMAGE .
+            echo "🐳 Build new backend image using LOCAL Dockerfile"
+            sudo docker build -t $NEW_IMAGE -f $LOCAL_DOCKERFILE .
 
             echo "📌 Tag new image as latest"
             sudo docker tag $NEW_IMAGE $LATEST_IMAGE
