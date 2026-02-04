@@ -30,6 +30,7 @@ jobs:
             PORT_MAPPING="5000:5000"
             ENV_FILE="/home/ubuntu/envs/selorg-api.env"
 
+            echo "➡️ Go to backend directory"
             cd $BACKEND_DIR
 
             echo "🧹 Clean repo & pull latest code"
@@ -43,6 +44,7 @@ jobs:
             BACKUP_IMAGE="${IMAGE_NAME}:backup"
 
             echo "✅ Commit: $COMMIT"
+            echo "🐳 New image: $NEW_IMAGE"
 
             echo "📌 Backup current latest image (if exists)"
             sudo docker image inspect $LATEST_IMAGE >/dev/null 2>&1 && sudo docker tag $LATEST_IMAGE $BACKUP_IMAGE || true
