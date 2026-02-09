@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken');
 const logger = require('../utils/logger');
-const { ErrorResponse } = require('../utils/ErrorResponse');
+const ErrorResponse = require('../utils/ErrorResponse');
 
 /**
  * Validates JWT secret on startup

@@ -1,4 +1,4 @@
-const { ErrorResponse } = require('../utils/ErrorResponse');
+const ErrorResponse = require('../utils/ErrorResponse');
 const logger = require('../utils/logger');
 
 /**
@@ -6,8 +6,8 @@ const logger = require('../utils/logger');
  * Handles all errors thrown in the application with consistent response format
  */
 const errorHandler = (err, req, res, next) => {
-  // Determine status code
-  const statusCode = err instanceof ErrorResponse ? err.statusCode : 500;
+  const isErrorResponse = typeof ErrorResponse === 'function' && err instanceof ErrorResponse;
+  const statusCode = isErrorResponse ? err.statusCode : (typeof err.statusCode === 'number' && err.statusCode >= 400 && err.statusCode < 600 ? err.statusCode : 500);
   const message = err.message || 'Internal server error';
 
   // Log error with context
@@ -25,7 +25,7 @@ const errorHandler = (err, req, res, next) => {
   const errorResponse = {
     success: false,
     error: {
-      code: err instanceof ErrorResponse && err.code
+      code: isErrorResponse && err.code
         ? err.code
         : `HTTP_${statusCode}`,
       message,
@@ -38,7 +38,7 @@ const errorHandler = (err, req, res, next) => {
   };
 
   // Add details if available
-  if (err instanceof ErrorResponse && err.details) {
+  if (isErrorResponse && err.details) {
     errorResponse.error.details = err.details;
   }
 

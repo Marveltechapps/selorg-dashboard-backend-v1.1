@@ -7,11 +7,12 @@ const orderRoutes = require('./orderRoutes');
 
 const router = express.Router();
 
+// Orders (list + assign for rider overview / live order board)
+// MUST be registered BEFORE riderRoutes to avoid /:riderId catching /orders
+router.use('/orders', orderRoutes);
+
 // Rider routes (list, create, get, update, location, distribution)
 router.use('/', riderRoutes);
-
-// Orders (list + assign for rider overview / live order board)
-router.use('/orders', orderRoutes);
 
 // Dispatch routes (unassigned orders, assign, map)
 router.use('/dispatch', dispatchRoutes);

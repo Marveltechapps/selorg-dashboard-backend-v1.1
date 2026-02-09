@@ -12,6 +12,7 @@ router.post('/vendors/:vendorId/certificates', requireAuth, upload.single('file'
 
 // top-level certificate operations
 router.get('/certificates/:certificateId', certificateController.getCertificate);
+router.patch('/certificates/:certificateId', requireAuth, certificateController.updateCertificate);
 router.delete('/certificates/:certificateId', requireAuth, certificateController.deleteCertificate);
 
 module.exports = router;

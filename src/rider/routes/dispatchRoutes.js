@@ -26,9 +26,15 @@ router.get('/recommended-riders/:orderId', dispatchController.getRecommendedRide
 // Order Assignment Details
 router.get('/order/:orderId/assignment-details', dispatchController.getOrderAssignmentDetails);
 
+// Order Creation (manual dispatch)
+router.post('/orders', dispatchController.createOrder);
+
 // Order Assignment Endpoints
 router.post('/assign', dispatchController.assignOrder);
 router.post('/batch-assign', dispatchController.batchAssignOrders);
 router.post('/auto-assign', conditionalValidateAutoAssign, dispatchController.autoAssignOrders);
+
+// Utility Endpoints
+router.post('/fix-rider-capacities', dispatchController.fixRiderCapacities);
 
 module.exports = router;

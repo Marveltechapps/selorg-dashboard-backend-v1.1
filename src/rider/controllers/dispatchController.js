@@ -1,5 +1,6 @@
 
 const dispatchService = require('../services/dispatchService');
+const { fixRiderCapacity } = require('../scripts/fixRiderCapacity');
 const cache = require('../../utils/cache');
 const logger = require('../../core/utils/logger');
 
@@ -137,6 +138,63 @@ const getOrderAssignmentDetails = async (req, res, next) => {
 };
 
 /**
+ * Create order (manual dispatch)
+ */
+const createOrder = async (req, res, next) => {
+  try {
+    const body = req.body || {};
+    
+    // Validate required fields
+    if (!body.pickup && !body.pickupLocation) {
+      return res.status(400).json({ 
+        error: 'Bad Request', 
+        message: 'Pickup location is required',
+        code: 400 
+      });
+    }
+    if (!body.drop && !body.dropLocation) {
+      return res.status(400).json({ 
+        error: 'Bad Request', 
+        message: 'Drop location is required',
+        code: 400 
+      });
+    }
+
+    const result = await dispatchService.createOrder({
+      orderId: body.orderId,
+      pickup: body.pickup || body.pickupLocation,
+      drop: body.drop || body.dropLocation,
+      customer: body.customer || body.customerName || 'Customer',
+    });
+    try {
+      await cache.delByPattern('orders:*').catch(() => {});
+      await cache.delByPattern('dispatch:*').catch(() => {});
+    } catch (_) { /* ignore */ }
+    res.status(201).json(result);
+  } catch (error) {
+    logger.error('Error creating order:', error);
+    if (error.message === 'Order not found' || error.message === 'Rider not found') {
+      return res.status(404).json({ error: 'Not Found', message: error.message });
+    }
+    if (error.message && error.message.includes('Database connection not ready')) {
+      return res.status(503).json({ 
+        error: 'Service Unavailable', 
+        message: error.message,
+        code: 503 
+      });
+    }
+    if (error.code === 11000) {
+      return res.status(400).json({ 
+        error: 'Bad Request', 
+        message: 'Order with this ID already exists',
+        code: 400 
+      });
+    }
+    next(error);
+  }
+};
+
+/**
  * Manually assign order to rider
  */
 const assignOrder = async (req, res, next) => {
@@ -152,15 +210,18 @@ const assignOrder = async (req, res, next) => {
     }
 
     const result = await dispatchService.assignOrder(orderId, riderId, overrideSla || false);
-    
-    // Invalidate all related cache entries
-    await cache.delByPattern('orders:*');
-    await cache.delByPattern('riders:*');
-    await cache.del(`rider:${riderId}`);
-    await cache.del('distribution');
-    await cache.delByPattern('dashboard:*');
-    await cache.delByPattern('dispatch:*');
-    
+
+    try {
+      await Promise.all([
+        cache.delByPattern('orders:*'),
+        cache.delByPattern('riders:*'),
+        cache.del(`rider:${riderId}`),
+        cache.del('distribution'),
+        cache.delByPattern('dashboard:*'),
+        cache.delByPattern('dispatch:*'),
+      ]).catch(() => {});
+    } catch (_) { /* ignore cache errors */ }
+
     res.status(200).json(result);
   } catch (error) {
     logger.error('Error in assignOrder controller:', error);
@@ -171,11 +232,20 @@ const assignOrder = async (req, res, next) => {
         code: 404,
       });
     }
+    if (error.message && error.message.includes('Database connection not ready')) {
+      return res.status(503).json({
+        error: 'Service Unavailable',
+        message: error.message,
+        code: 503,
+      });
+    }
     if (
       error.message === 'Order is not pending' ||
       error.message === 'Rider is at capacity' ||
       error.message === 'Rider is not available for assignment' ||
-      error.message === 'Assignment would violate SLA deadline'
+      error.message === 'Assignment would violate SLA deadline' ||
+      error.message.includes('Cannot assign order') ||
+      error.message.includes('has no rider assigned')
     ) {
       return res.status(400).json({
         error: 'Bad Request',
@@ -183,7 +253,13 @@ const assignOrder = async (req, res, next) => {
         code: 400,
       });
     }
-    next(error);
+    // For any other error, return 500 with proper error message
+    const errorMessage = error.message || 'Internal server error';
+    return res.status(500).json({ 
+      error: 'Internal Server Error', 
+      message: errorMessage,
+      code: 500 
+    });
   }
 };
 
@@ -203,14 +279,17 @@ const batchAssignOrders = async (req, res, next) => {
     }
     
     const result = await dispatchService.batchAssignOrders(orderIds);
-    
-    // Invalidate all related cache entries
-    await cache.delByPattern('orders:*');
-    await cache.delByPattern('riders:*');
-    await cache.delByPattern('distribution');
-    await cache.delByPattern('dashboard:*');
-    await cache.delByPattern('dispatch:*');
-    
+
+    try {
+      await Promise.all([
+        cache.delByPattern('orders:*'),
+        cache.delByPattern('riders:*'),
+        cache.del('distribution'),
+        cache.delByPattern('dashboard:*'),
+        cache.delByPattern('dispatch:*'),
+      ]).catch(() => {});
+    } catch (_) { /* ignore */ }
+
     res.status(200).json(result);
   } catch (error) {
     logger.error('Error in batchAssignOrders controller:', error);
@@ -225,17 +304,46 @@ const autoAssignOrders = async (req, res, next) => {
   try {
     const { orderIds } = req.body;
     const result = await dispatchService.autoAssignOrders(orderIds || []);
-    
-    // Invalidate all related cache entries
-    await cache.delByPattern('orders:*');
-    await cache.delByPattern('riders:*');
-    await cache.delByPattern('distribution');
-    await cache.delByPattern('dashboard:*');
-    await cache.delByPattern('dispatch:*');
-    
+
+    try {
+      await Promise.all([
+        cache.delByPattern('orders:*'),
+        cache.delByPattern('riders:*'),
+        cache.del('distribution'),
+        cache.delByPattern('dashboard:*'),
+        cache.delByPattern('dispatch:*'),
+      ]).catch(() => {});
+    } catch (_) { /* ignore */ }
+
     res.status(200).json(result);
   } catch (error) {
     logger.error('Error in autoAssignOrders controller:', error);
+    next(error);
+  }
+};
+
+/**
+ * Fix rider capacities by recalculating based on actual assigned orders
+ * This is useful when orders are deleted but rider capacities weren't updated
+ * Optional body parameter: { maxLoad: number } to set a custom max capacity
+ */
+const fixRiderCapacities = async (req, res, next) => {
+  try {
+    const { maxLoad } = req.body || {};
+    const targetMaxLoad = maxLoad && typeof maxLoad === 'number' && maxLoad > 0 ? maxLoad : null;
+    
+    logger.info('[dispatchController] Fixing rider capacities...', {
+      customMaxLoad: targetMaxLoad || 'using default (10)'
+    });
+    
+    const result = await fixRiderCapacity(targetMaxLoad);
+    res.status(200).json({
+      success: true,
+      message: 'Rider capacities fixed successfully',
+      ...result
+    });
+  } catch (error) {
+    logger.error('Error fixing rider capacities:', error);
     next(error);
   }
 };
@@ -248,7 +356,9 @@ module.exports = {
   getMapOrders,
   getRecommendedRiders,
   getOrderAssignmentDetails,
+  createOrder,
   assignOrder,
   batchAssignOrders,
   autoAssignOrders,
+  fixRiderCapacities,
 };

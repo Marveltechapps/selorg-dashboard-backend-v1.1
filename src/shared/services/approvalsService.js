@@ -60,12 +60,15 @@ const listApprovals = async (filters = {}) => {
 
     const query = {};
 
-    if (status !== 'all') {
+    // Handle 'all' status - don't filter by status
+    if (status && status !== 'all' && status !== '') {
       query.status = status;
     }
 
     if (type) query.type = type;
     if (requestedBy) query.requestedById = requestedBy;
+
+    logger.info('[approvalsService.listApprovals] Query:', { query, filters });
 
     const skip = (page - 1) * limit;
     const approvals = await ApprovalRequest.find(query)
@@ -75,6 +78,8 @@ const listApprovals = async (filters = {}) => {
       .lean();
 
     const total = await ApprovalRequest.countDocuments(query);
+
+    logger.info('[approvalsService.listApprovals] Found:', { count: approvals.length, total });
 
     return {
       approvals,
@@ -144,16 +149,31 @@ const approveRequest = async (approvalId, notes) => {
       throw new Error('Request has already been processed');
     }
 
-    approval.status = 'approved';
-    approval.approvedBy = 'Admin'; // In real app, get from auth
-    approval.approvedById = 'admin-1'; // In real app, get from auth
-    approval.approvedAt = new Date();
+    // Use findOneAndUpdate to ensure persistence
+    const updateData = {
+      status: 'approved',
+      approvedBy: 'Admin', // In real app, get from auth
+      approvedById: 'admin-1', // In real app, get from auth
+      approvedAt: new Date(),
+      updatedAt: new Date(),
+    };
+    
     if (notes) {
-      approval.metadata = { ...approval.metadata, approvalNotes: notes };
+      updateData.metadata = { ...approval.metadata, approvalNotes: notes };
     }
 
-    await approval.save();
-    return approval.toObject();
+    const updated = await ApprovalRequest.findOneAndUpdate(
+      { id: approvalId },
+      { $set: updateData },
+      { new: true, runValidators: false }
+    );
+    
+    if (!updated || updated.status !== 'approved') {
+      logger.error('[approvalsService.approveRequest] Update failed', { approvalId, updatedStatus: updated?.status });
+      throw new Error('Failed to save approval');
+    }
+    
+    return updated.toObject();
   } catch (error) {
     logger.error('Error approving request:', error);
     throw error;
@@ -174,17 +194,32 @@ const rejectRequest = async (approvalId, rejectionData) => {
       throw new Error('Request has already been processed');
     }
 
-    approval.status = 'rejected';
-    approval.approvedBy = 'Admin'; // In real app, get from auth
-    approval.approvedById = 'admin-1'; // In real app, get from auth
-    approval.approvedAt = new Date();
-    approval.rejectionReason = rejectionData.reason;
+    // Use findOneAndUpdate to ensure persistence
+    const updateData = {
+      status: 'rejected',
+      approvedBy: 'Admin', // In real app, get from auth
+      approvedById: 'admin-1', // In real app, get from auth
+      approvedAt: new Date(),
+      updatedAt: new Date(),
+      rejectionReason: rejectionData.reason,
+    };
+    
     if (rejectionData.notes) {
-      approval.metadata = { ...approval.metadata, rejectionNotes: rejectionData.notes };
+      updateData.metadata = { ...approval.metadata, rejectionNotes: rejectionData.notes };
     }
 
-    await approval.save();
-    return approval.toObject();
+    const updated = await ApprovalRequest.findOneAndUpdate(
+      { id: approvalId },
+      { $set: updateData },
+      { new: true, runValidators: false }
+    );
+    
+    if (!updated || updated.status !== 'rejected') {
+      logger.error('[approvalsService.rejectRequest] Update failed', { approvalId, updatedStatus: updated?.status });
+      throw new Error('Failed to save rejection');
+    }
+    
+    return updated.toObject();
   } catch (error) {
     logger.error('Error rejecting request:', error);
     throw error;
@@ -223,15 +258,29 @@ const batchApprove = async (approvalIds, notes) => {
           continue;
         }
 
-        approval.status = 'approved';
-        approval.approvedBy = 'Admin';
-        approval.approvedById = 'admin-1';
-        approval.approvedAt = new Date();
+        // Use findOneAndUpdate to ensure persistence
+        const updateData = {
+          status: 'approved',
+          approvedBy: 'Admin',
+          approvedById: 'admin-1',
+          approvedAt: new Date(),
+          updatedAt: new Date(),
+        };
+        
         if (notes) {
-          approval.metadata = { ...approval.metadata, approvalNotes: notes };
+          updateData.metadata = { ...approval.metadata, approvalNotes: notes };
         }
 
-        await approval.save();
+        const updated = await ApprovalRequest.findOneAndUpdate(
+          { id: approvalId },
+          { $set: updateData },
+          { new: true, runValidators: false }
+        );
+        
+        if (!updated || updated.status !== 'approved') {
+          throw new Error('Failed to save approval');
+        }
+        
         results.push({
           approvalId,
           status: 'approved',

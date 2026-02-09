@@ -29,9 +29,15 @@ const listApprovals = async (req, res, next) => {
       limit: parseInt(req.query.limit) || 50,
     };
 
+    logger.info('[approvalsController.listApprovals] Request filters:', filters);
     const result = await approvalsService.listApprovals(filters);
+    logger.info('[approvalsController.listApprovals] Response:', { 
+      count: result.approvals?.length || 0, 
+      total: result.total 
+    });
     res.status(200).json(result);
   } catch (error) {
+    logger.error('[approvalsController.listApprovals] Error:', error);
     next(error);
   }
 };

@@ -25,6 +25,12 @@ const OrderSchema = new mongoose.Schema({
     match: /^ORD-\d+$/,
     index: true,
   },
+  order_id: {
+    type: String,
+    unique: true,
+    sparse: true,
+    match: /^ORD-\d+$/,
+  },
   status: {
     type: String,
     required: true,

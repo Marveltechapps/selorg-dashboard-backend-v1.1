@@ -15,6 +15,7 @@ router.post('/audits', asyncHandler(qcComplianceController.createAudit));
 // Temperature Compliance
 router.get('/temperature', asyncHandler(qcComplianceController.getTemperatureCompliance));
 router.post('/temperature', asyncHandler(qcComplianceController.createTemperatureCompliance));
+router.patch('/temperature/:id', asyncHandler(qcComplianceController.updateTemperatureCompliance));
 
 // Vendor Ratings
 router.get('/ratings', asyncHandler(qcComplianceController.getVendorRatings));

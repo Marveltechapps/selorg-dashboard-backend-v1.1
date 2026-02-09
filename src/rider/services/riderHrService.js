@@ -176,18 +176,107 @@ const getRiderDetails = async (riderId) => {
 };
 
 const onboardRider = async (riderData) => {
+  let newId = null; // Declare at function scope for error handling
   try {
-    const { name, phone, email, contract } = riderData;
+    let { name, phone, email, contract } = riderData || {};
+    name = name != null ? String(name).trim() : '';
+    if (!name) {
+      const err = new Error('Name is required');
+      err.statusCode = 400;
+      throw err;
+    }
+    phone = phone != null ? String(phone).trim() : '';
+    // Handle various phone formats: 9876543210, +919876543210, +1 234 567 8900, etc.
+    const digits = phone.replace(/\D/g, '');
+    if (digits.length >= 10) {
+      // If it starts with country code, use it; otherwise add +91 for India
+      if (digits.length === 10) {
+        phone = `+91${digits}`;
+      } else if (digits.startsWith('91') && digits.length === 12) {
+        phone = `+${digits}`;
+      } else if (digits.length > 10) {
+        // International format - use as is if it starts with valid country code
+        phone = `+${digits}`;
+      } else {
+        phone = `+91${digits}`;
+      }
+      // Validate final format
+      if (!/^\+[1-9]\d{1,14}$/.test(phone)) {
+        // Fallback: use last 10 digits with +91
+        const tenDigit = digits.slice(-10);
+        phone = `+91${tenDigit}`;
+      }
+    }
+    if (!phone || !/^\+[1-9]\d{1,14}$/.test(phone)) {
+      const err = new Error('Phone is required and must be a valid number (e.g. 9876543210, +919876543210, or +1 234 567 8900)');
+      err.statusCode = 400;
+      throw err;
+    }
+    if (!email || typeof email !== 'string' || !String(email).trim()) {
+      email = `${name.replace(/\s+/g, '.').toLowerCase().replace(/[^a-z0-9.-]/g, '')}@rider.local`;
+    }
+    email = String(email).trim().toLowerCase();
 
-    // Generate rider ID
-    const lastRider = await RiderHR.findOne().sort({ id: -1 }).lean();
-    const lastId = lastRider ? parseInt(lastRider.id.split('-')[1]) : 0;
-    const newId = `RIDER-${String(lastId + 1).padStart(4, '0')}`;
+    // Generate unique rider ID - check both RiderHR and Rider collections
+    // to ensure the ID doesn't exist in either collection
+    const [lastRiderHR, lastRider] = await Promise.all([
+      RiderHR.findOne().sort({ id: -1 }).lean(),
+      Rider.findOne().sort({ id: -1 }).lean()
+    ]);
+    
+    const lastIdHR = lastRiderHR ? parseInt(lastRiderHR.id.split('-')[1]) : 0;
+    const lastIdRider = lastRider ? parseInt(lastRider.id.split('-')[1]) : 0;
+    const lastId = Math.max(lastIdHR, lastIdRider);
+    
+    // Find next available ID by checking if it exists in either collection
+    let newId;
+    let attemptId = lastId + 1;
+    let maxAttempts = 100; // Prevent infinite loop
+    let attempts = 0;
+    
+    while (attempts < maxAttempts) {
+      const candidateId = `RIDER-${String(attemptId).padStart(4, '0')}`;
+      
+      // Check if this ID exists in either collection
+      const [existsInHR, existsInRider] = await Promise.all([
+        RiderHR.findOne({ id: candidateId }).lean(),
+        Rider.findOne({ id: candidateId }).lean()
+      ]);
+      
+      if (!existsInHR && !existsInRider) {
+        newId = candidateId;
+        break;
+      }
+      
+      attemptId++;
+      attempts++;
+    }
+    
+    if (!newId) {
+      const err = new Error('Unable to generate unique rider ID. Please try again.');
+      err.statusCode = 500;
+      throw err;
+    }
 
     // Set default contract dates
     const startDate = contract?.startDate ? new Date(contract.startDate) : new Date();
     const endDate = contract?.endDate ? new Date(contract.endDate) : new Date(startDate);
     endDate.setFullYear(endDate.getFullYear() + 1);
+
+    // Check if rider with this phone or email already exists
+    const existingRiderByPhone = await RiderHR.findOne({ phone }).lean();
+    if (existingRiderByPhone) {
+      const err = new Error('Rider with this phone number already exists');
+      err.statusCode = 400;
+      throw err;
+    }
+    
+    const existingRiderByEmail = await RiderHR.findOne({ email }).lean();
+    if (existingRiderByEmail) {
+      const err = new Error('Rider with this email already exists');
+      err.statusCode = 400;
+      throw err;
+    }
 
     // Create rider
     const rider = new RiderHR({
@@ -212,15 +301,63 @@ const onboardRider = async (riderData) => {
       },
     });
 
+    try {
     await rider.save();
+    logger.info('[riderHrService.onboardRider] RiderHR saved', { id: rider.id, name: rider.name });
+    } catch (saveError) {
+      // If duplicate key error, try to find next available ID and retry once
+      if (saveError.code === 11000) {
+        logger.warn('[riderHrService.onboardRider] Duplicate key error, finding next available ID', { 
+          attemptedId: newId,
+          error: saveError.message 
+        });
+        
+        // Find next available ID
+        let retryId = attemptId + 1;
+        let retryAttempts = 0;
+        let retryNewId = null;
+        
+        while (retryAttempts < 50 && !retryNewId) {
+          const candidateId = `RIDER-${String(retryId).padStart(4, '0')}`;
+          const [existsInHR, existsInRider] = await Promise.all([
+            RiderHR.findOne({ id: candidateId }).lean(),
+            Rider.findOne({ id: candidateId }).lean()
+          ]);
+          
+          if (!existsInHR && !existsInRider) {
+            retryNewId = candidateId;
+            break;
+          }
+          retryId++;
+          retryAttempts++;
+        }
+        
+        if (retryNewId) {
+          rider.id = retryNewId;
+          await rider.save();
+          newId = retryNewId; // Update newId for operational rider creation
+          logger.info('[riderHrService.onboardRider] RiderHR saved with retry ID', { id: rider.id, name: rider.name });
+        } else {
+          throw saveError; // Re-throw if we can't find an available ID
+        }
+      } else {
+        throw saveError; // Re-throw if it's not a duplicate key error
+      }
+    }
 
     // Also create operational rider record for consistency
+    // Use findOneAndUpdate with upsert to handle duplicates gracefully
+    try {
     const nameParts = name.trim().split(/\s+/);
     const avatarInitials = nameParts.length >= 2
       ? (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase().slice(0, 2)
       : nameParts[0].slice(0, 2).toUpperCase();
 
-    const operationalRider = new Rider({
+      // Use findOneAndUpdate with upsert to avoid duplicate key errors
+      await Rider.findOneAndUpdate(
+        { id: newId },
+        {
+          $set: {
       id: newId,
       name: name.trim(),
       avatarInitials,
@@ -229,16 +366,27 @@ const onboardRider = async (riderData) => {
       location: null,
       capacity: {
         currentLoad: 0,
-        maxLoad: 5,
+              maxLoad: 10,
       },
       avgEtaMins: 0,
       rating: 0,
       zone: null,
-    });
+          }
+        },
+        { upsert: true, new: true, runValidators: false }
+      );
+      logger.info('[riderHrService.onboardRider] Operational rider created/updated', { id: newId });
+    } catch (operationalRiderError) {
+      // Log but don't fail the entire operation if operational rider creation fails
+      logger.warn('[riderHrService.onboardRider] Failed to create operational rider, continuing anyway', {
+        id: newId,
+        error: operationalRiderError.message
+      });
+      // Don't throw - the HR record is already saved, so we continue
+    }
 
-    await operationalRider.save();
-
-    // Create default training record
+    // Create default training record (use upsert to handle duplicates)
+    try {
     const defaultModules = [
       { id: 'MOD-001', name: 'Safety Protocols', completed: false },
       { id: 'MOD-002', name: 'Traffic Rules', completed: false },
@@ -247,7 +395,10 @@ const onboardRider = async (riderData) => {
       { id: 'MOD-005', name: 'Emergency Procedures', completed: false },
     ];
 
-    const training = new Training({
+      await Training.findOneAndUpdate(
+        { riderId: rider.id },
+        {
+          $set: {
       riderId: rider.id,
       riderName: rider.name,
       status: 'not_started',
@@ -255,12 +406,25 @@ const onboardRider = async (riderData) => {
       modulesCompleted: 0,
       totalModules: 5,
       progressPercentage: 0,
-    });
+          }
+        },
+        { upsert: true, new: true, runValidators: false }
+      );
+      logger.info('[riderHrService.onboardRider] Training record created/updated', { riderId: rider.id });
+    } catch (trainingError) {
+      logger.warn('[riderHrService.onboardRider] Failed to create training record', {
+        riderId: rider.id,
+        error: trainingError.message
+      });
+      // Continue - don't fail the entire operation
+    }
 
-    await training.save();
-
-    // Create compliance record
-    const compliance = new Compliance({
+    // Create compliance record (use upsert to handle duplicates)
+    try {
+      await Compliance.findOneAndUpdate(
+        { riderId: rider.id },
+        {
+          $set: {
       riderId: rider.id,
       riderName: rider.name,
       isCompliant: true,
@@ -269,21 +433,43 @@ const onboardRider = async (riderData) => {
       suspension: {
         isSuspended: false,
       },
-    });
+          }
+        },
+        { upsert: true, new: true, runValidators: false }
+      );
+      logger.info('[riderHrService.onboardRider] Compliance record created/updated', { riderId: rider.id });
+    } catch (complianceError) {
+      logger.warn('[riderHrService.onboardRider] Failed to create compliance record', {
+        riderId: rider.id,
+        error: complianceError.message
+      });
+      // Continue - don't fail the entire operation
+    }
 
-    await compliance.save();
-
-    // Create contract record
-    const contractRecord = new Contract({
+    // Create contract record (use upsert to handle duplicates)
+    try {
+      await Contract.findOneAndUpdate(
+        { riderId: rider.id },
+        {
+          $set: {
       riderId: rider.id,
       riderName: rider.name,
       startDate,
       endDate,
       renewalDue: false,
       status: 'active',
-    });
-
-    await contractRecord.save();
+          }
+        },
+        { upsert: true, new: true, runValidators: false }
+      );
+      logger.info('[riderHrService.onboardRider] Contract record created/updated', { riderId: rider.id });
+    } catch (contractError) {
+      logger.warn('[riderHrService.onboardRider] Failed to create contract record', {
+        riderId: rider.id,
+        error: contractError.message
+      });
+      // Continue - don't fail the entire operation
+    }
 
     return {
       id: rider.id,
@@ -308,11 +494,60 @@ const onboardRider = async (riderData) => {
     };
   } catch (error) {
     logger.error('Error onboarding rider:', error);
+    
+    // Only throw duplicate error if it's for the main RiderHR record
+    // Related records (Training, Compliance, Contract) failures are logged but don't fail the operation
     if (error.code === 11000) {
+      // Check if this is a duplicate key error for RiderHR
+      if (error.keyPattern && (error.keyPattern.id || error.keyPattern.phone || error.keyPattern.email)) {
+        if (error.keyPattern.phone) {
+          const duplicateError = new Error('Rider with this phone number already exists');
+          duplicateError.statusCode = 400;
+          throw duplicateError;
+        }
+        if (error.keyPattern.email) {
+          const duplicateError = new Error('Rider with this email already exists');
+          duplicateError.statusCode = 400;
+          throw duplicateError;
+        }
+        // For ID duplicates, check if RiderHR was actually saved
+        const savedRider = await RiderHR.findOne({ id: newId || error.keyValue?.id }).lean();
+        if (savedRider) {
+          // RiderHR was saved successfully, so return success even if related records failed
+          logger.warn('[riderHrService.onboardRider] RiderHR saved but related records may have failed', {
+            riderId: savedRider.id,
+            originalError: error.message
+          });
+          // Return the saved rider data
+          return {
+            id: savedRider.id,
+            name: savedRider.name,
+            phone: savedRider.phone,
+            email: savedRider.email,
+            status: savedRider.status,
+            onboardingStatus: savedRider.onboardingStatus,
+            trainingStatus: savedRider.trainingStatus,
+            appAccess: savedRider.appAccess,
+            deviceAssigned: savedRider.deviceAssigned,
+            contract: {
+              startDate: savedRider.contract.startDate.toISOString().split('T')[0],
+              endDate: savedRider.contract.endDate.toISOString().split('T')[0],
+              renewalDue: savedRider.contract.renewalDue,
+            },
+            compliance: {
+              isCompliant: savedRider.compliance.isCompliant,
+              lastAuditDate: savedRider.compliance.lastAuditDate.toISOString().split('T')[0],
+              policyViolationsCount: savedRider.compliance.policyViolationsCount,
+            },
+          };
+        }
+        // If RiderHR wasn't saved, throw the error
       const duplicateError = new Error('Rider with this ID already exists');
       duplicateError.statusCode = 400;
       throw duplicateError;
+      }
     }
+    if (error.name === 'ValidationError' && !error.statusCode) error.statusCode = 400;
     throw error;
   }
 };

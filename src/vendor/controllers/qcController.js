@@ -30,10 +30,34 @@ async function getQCCheck(req, res, next) {
 
 async function patchQCCheck(req, res, next) {
   try {
+    console.log('PATCH /qc/:qcId - Request:', {
+      qcId: req.params.qcId,
+      body: req.body
+    });
     const c = await qcService.updateQCCheck(req.params.qcId, req.body);
-    res.json(c);
+    console.log('PATCH /qc/:qcId - Success:', {
+      id: c._id?.toString() || c.id,
+      status: c.status
+    });
+    res.json({
+      success: true,
+      data: c
+    });
   } catch (err) {
-    next(err);
+    // Handle specific error cases
+    if (err.status === 404) {
+      return res.status(404).json({
+        success: false,
+        message: err.message || 'QC check not found',
+      });
+    }
+    // Log error for debugging
+    console.error('Error updating QC check:', err);
+    res.status(500).json({
+      success: false,
+      message: err.message || 'Failed to update QC check',
+      error: process.env.NODE_ENV === 'development' ? err.stack : undefined,
+    });
   }
 }
 

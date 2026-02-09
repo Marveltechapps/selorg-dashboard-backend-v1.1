@@ -27,7 +27,7 @@ const CapacitySchema = new mongoose.Schema({
     type: Number,
     required: true,
     min: 1,
-    default: 5,
+    default: 10,
   },
 }, { _id: false });
 
@@ -38,6 +38,12 @@ const RiderSchema = new mongoose.Schema({
     unique: true,
     match: /^RIDER-\d+$/,
     index: true,
+  },
+  rider_id: {
+    type: String,
+    unique: true,
+    sparse: true,
+    match: /^RIDER-\d+$/,
   },
   name: {
     type: String,
@@ -108,4 +114,12 @@ RiderSchema.index({ status: 1, zone: 1 });
 RiderSchema.index({ name: 'text' });
 
 
-module.exports = mongoose.models.Rider || mongoose.model('Rider', RiderSchema);
+// IMPORTANT:
+// We must use a unique Mongoose model name here to avoid collisions with
+// `src/darkstore/models/Rider.js` and `src/production/models/Rider.js`, which
+// also register a model named "Rider" but with a different schema.
+//
+// If we reuse the same model name, whichever file is loaded first "wins" and
+// the other modules silently get the wrong schema (causing validation errors
+// like requiring `store_id`, `last_update`, etc. in rider-fleet flows).
+module.exports = mongoose.models.RiderOps || mongoose.model('RiderOps', RiderSchema);

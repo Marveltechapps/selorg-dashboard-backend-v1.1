@@ -83,6 +83,7 @@ ApprovalRequestSchema.index({ status: 1, createdAt: -1 });
 ApprovalRequestSchema.index({ type: 1, status: 1 });
 ApprovalRequestSchema.index({ requestedById: 1 });
 
-const ApprovalRequest = mongoose.models.ApprovalRequest || mongoose.model('ApprovalRequest', ApprovalRequestSchema);
+// Use a unique model name to avoid collision with merch/models/ApprovalRequest
+const ApprovalRequest = mongoose.models.SharedApprovalRequest || mongoose.model('SharedApprovalRequest', ApprovalRequestSchema);
 
 module.exports = ApprovalRequest;

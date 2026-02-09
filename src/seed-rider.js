@@ -1,6 +1,7 @@
 /**
- * Seed Rider Fleet dashboard data: Riders, Orders, RiderHR, Documents, Training, Vehicles, Maintenance, Approvals.
- * Run: node src/seed-rider.js (from backend root, with MONGO_URI set)
+ * Seed Rider Fleet dashboard data: Riders, Orders, RiderHR, Documents, Training, Vehicles, Maintenance, Task Approvals, Communication Chats.
+ * Run: npm run seed:rider (from backend root; set MONGO_URI in .env).
+ * This populates Task Approvals and Communication Hub (Active Chats) so they show data in the dashboard.
  */
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '..', '.env') });
@@ -15,6 +16,7 @@ const Training = require('./rider/models/Training');
 const Vehicle = require('./rider/models/Vehicle');
 const MaintenanceTask = require('./rider/models/MaintenanceTask');
 const ApprovalRequest = require('./common-models/ApprovalRequest');
+const Chat = require('./common-models/Chat');
 const Contract = require('./rider/models/Contract');
 const Compliance = require('./rider/models/Compliance');
 
@@ -32,13 +34,13 @@ async function seed() {
   const future = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
   const past = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-  // 1. Riders
+  // 1. Riders (set rider_id to satisfy unique index on riders collection if present)
   const ridersData = [
-    { id: 'RIDER-1', name: 'Raj Kumar', avatarInitials: 'RK', status: 'online', currentOrderId: 'ORD-1', location: { lat: 13.0827, lng: 80.2707 }, capacity: { currentLoad: 1, maxLoad: 4 }, avgEtaMins: 12, rating: 4.8, zone: 'Central' },
-    { id: 'RIDER-2', name: 'Priya M', avatarInitials: 'PM', status: 'busy', currentOrderId: 'ORD-2', location: { lat: 13.09, lng: 80.28 }, capacity: { currentLoad: 2, maxLoad: 4 }, avgEtaMins: 8, rating: 4.6, zone: 'North' },
-    { id: 'RIDER-3', name: 'Amit S', avatarInitials: 'AS', status: 'idle', currentOrderId: null, location: { lat: 13.08, lng: 80.26 }, capacity: { currentLoad: 0, maxLoad: 4 }, avgEtaMins: 15, rating: 4.9, zone: 'South' },
-    { id: 'RIDER-4', name: 'Sneha P', avatarInitials: 'SP', status: 'online', currentOrderId: null, location: { lat: 13.07, lng: 80.27 }, capacity: { currentLoad: 1, maxLoad: 4 }, avgEtaMins: 10, rating: 4.7, zone: 'Central' },
-    { id: 'RIDER-5', name: 'Vikram R', avatarInitials: 'VR', status: 'idle', currentOrderId: null, location: { lat: 13.09, lng: 80.29 }, capacity: { currentLoad: 0, maxLoad: 4 }, avgEtaMins: 14, rating: 4.5, zone: 'North' },
+    { id: 'RIDER-1', rider_id: 'RIDER-1', name: 'Raj Kumar', avatarInitials: 'RK', status: 'online', currentOrderId: 'ORD-1', location: { lat: 13.0827, lng: 80.2707 }, capacity: { currentLoad: 1, maxLoad: 4 }, avgEtaMins: 12, rating: 4.8, zone: 'Central' },
+    { id: 'RIDER-2', rider_id: 'RIDER-2', name: 'Priya M', avatarInitials: 'PM', status: 'busy', currentOrderId: 'ORD-2', location: { lat: 13.09, lng: 80.28 }, capacity: { currentLoad: 2, maxLoad: 4 }, avgEtaMins: 8, rating: 4.6, zone: 'North' },
+    { id: 'RIDER-3', rider_id: 'RIDER-3', name: 'Amit S', avatarInitials: 'AS', status: 'idle', currentOrderId: null, location: { lat: 13.08, lng: 80.26 }, capacity: { currentLoad: 0, maxLoad: 4 }, avgEtaMins: 15, rating: 4.9, zone: 'South' },
+    { id: 'RIDER-4', rider_id: 'RIDER-4', name: 'Sneha P', avatarInitials: 'SP', status: 'online', currentOrderId: null, location: { lat: 13.07, lng: 80.27 }, capacity: { currentLoad: 1, maxLoad: 4 }, avgEtaMins: 10, rating: 4.7, zone: 'Central' },
+    { id: 'RIDER-5', rider_id: 'RIDER-5', name: 'Vikram R', avatarInitials: 'VR', status: 'idle', currentOrderId: null, location: { lat: 13.09, lng: 80.29 }, capacity: { currentLoad: 0, maxLoad: 4 }, avgEtaMins: 14, rating: 4.5, zone: 'North' },
   ];
   for (const r of ridersData) {
     await Rider.findOneAndUpdate({ id: r.id }, r, { upsert: true, new: true });
@@ -50,10 +52,10 @@ async function seed() {
   const sla2 = new Date(now.getTime() + 45 * 60 * 1000);
   const sla3 = new Date(now.getTime() + 60 * 60 * 1000);
   const ordersData = [
-    { id: 'ORD-1', status: 'in_transit', riderId: 'RIDER-1', etaMinutes: 8, slaDeadline: sla1, pickupLocation: 'Hub A, Chennai', dropLocation: '123 Main St', customerName: 'John D', items: ['Pizza', 'Cola'], timeline: [{ status: 'assigned', time: past, note: 'Assigned' }, { status: 'in_transit', time: now, note: 'Picked up' }], zone: 'Central' },
-    { id: 'ORD-2', status: 'assigned', riderId: 'RIDER-2', etaMinutes: 12, slaDeadline: sla2, pickupLocation: 'Hub B, Chennai', dropLocation: '456 Oak Ave', customerName: 'Jane S', items: ['Burger', 'Fries'], timeline: [{ status: 'assigned', time: now, note: 'Assigned' }], zone: 'North' },
-    { id: 'ORD-3', status: 'pending', riderId: null, etaMinutes: null, slaDeadline: sla3, pickupLocation: 'Hub A, Chennai', dropLocation: '789 Elm Rd', customerName: 'Bob T', items: ['Salad'], timeline: [], zone: 'Central' },
-    { id: 'ORD-4', status: 'delivered', riderId: 'RIDER-3', etaMinutes: null, slaDeadline: past, pickupLocation: 'Hub A', dropLocation: '321 Pine St', customerName: 'Alice W', items: ['Coffee'], timeline: [{ status: 'delivered', time: past, note: 'Delivered' }], completedAt: past, deliveryTimeSeconds: 1320, zone: 'South' },
+    { id: 'ORD-1', order_id: 'ORD-1', status: 'in_transit', riderId: 'RIDER-1', etaMinutes: 8, slaDeadline: sla1, pickupLocation: 'Hub A, Chennai', dropLocation: '123 Main St', customerName: 'John D', items: ['Pizza', 'Cola'], timeline: [{ status: 'assigned', time: past, note: 'Assigned' }, { status: 'in_transit', time: now, note: 'Picked up' }], zone: 'Central' },
+    { id: 'ORD-2', order_id: 'ORD-2', status: 'assigned', riderId: 'RIDER-2', etaMinutes: 12, slaDeadline: sla2, pickupLocation: 'Hub B, Chennai', dropLocation: '456 Oak Ave', customerName: 'Jane S', items: ['Burger', 'Fries'], timeline: [{ status: 'assigned', time: now, note: 'Assigned' }], zone: 'North' },
+    { id: 'ORD-3', order_id: 'ORD-3', status: 'pending', riderId: null, etaMinutes: null, slaDeadline: sla3, pickupLocation: 'Hub A, Chennai', dropLocation: '789 Elm Rd', customerName: 'Bob T', items: ['Salad'], timeline: [], zone: 'Central' },
+    { id: 'ORD-4', order_id: 'ORD-4', status: 'delivered', riderId: 'RIDER-3', etaMinutes: null, slaDeadline: past, pickupLocation: 'Hub A', dropLocation: '321 Pine St', customerName: 'Alice W', items: ['Coffee'], timeline: [{ status: 'delivered', time: past, note: 'Delivered' }], completedAt: past, deliveryTimeSeconds: 1320, zone: 'South' },
   ];
   for (const o of ordersData) {
     await Order.findOneAndUpdate({ id: o.id }, o, { upsert: true, new: true });
@@ -127,6 +129,8 @@ async function seed() {
     { id: 'approval-1', type: 'order_exception', title: 'Order delay exception', description: 'Customer requested extension', requestedBy: 'Raj K', requestedById: 'RIDER-1', requesterRole: 'Rider', status: 'pending', metadata: {} },
     { id: 'approval-2', type: 'document_approval', title: 'Driving license verification', description: 'New rider document', requestedBy: 'Priya M', requestedById: 'RIDER-2', requesterRole: 'Rider', status: 'pending', metadata: {} },
     { id: 'approval-3', type: 'vehicle_request', title: 'Vehicle swap request', description: 'Rider requested different vehicle', requestedBy: 'Amit S', requestedById: 'RIDER-3', requesterRole: 'Rider', status: 'pending', metadata: {} },
+    { id: 'approval-4', type: 'other', title: 'Approve cheque', description: 'Expense cheque for fuel reimbursement', requestedBy: 'Vikram R', requestedById: 'RIDER-5', requesterRole: 'Rider', status: 'pending', metadata: {} },
+    { id: 'approval-5', type: 'other', title: 'Approve cheque', description: 'Maintenance advance', requestedBy: 'Sneha P', requestedById: 'RIDER-4', requesterRole: 'Rider', status: 'pending', metadata: {} },
   ];
   for (const a of approvalsData) {
     await ApprovalRequest.findOneAndUpdate({ id: a.id }, a, { upsert: true, new: true });
@@ -158,6 +162,21 @@ async function seed() {
     await Compliance.findOneAndUpdate({ riderId: c.riderId }, c, { upsert: true, new: true });
   }
   console.log('Compliance seeded:', complianceData.length);
+
+  // 11. Chats (Communication Hub – active chats)
+  const lastMsg1 = new Date(now.getTime() - 5 * 60 * 1000);
+  const lastMsg2 = new Date(now.getTime() - 30 * 60 * 1000);
+  const lastMsg3 = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+  const chatsData = [
+    { id: 'chat-1', participantId: 'RIDER-1', participantName: 'Raj Kumar', participantType: 'Rider', isOnline: true, relatedOrderId: 'ORD-1', lastMessage: 'Reached pickup, leaving in 2 min', lastMessageTime: lastMsg1, unreadCount: 0 },
+    { id: 'chat-2', participantId: 'RIDER-2', participantName: 'Priya M', participantType: 'Rider', isOnline: true, relatedOrderId: 'ORD-2', lastMessage: 'Customer not at door', lastMessageTime: lastMsg2, unreadCount: 1 },
+    { id: 'chat-3', participantId: 'RIDER-3', participantName: 'Amit S', participantType: 'Rider', isOnline: false, relatedOrderId: null, lastMessage: 'Shift handover done', lastMessageTime: lastMsg3, unreadCount: 0 },
+    { id: 'chat-4', participantId: 'RIDER-4', participantName: 'Sneha P', participantType: 'Rider', isOnline: false, relatedOrderId: null, lastMessage: 'Need doc approval update', lastMessageTime: lastMsg3, unreadCount: 0 },
+  ];
+  for (const c of chatsData) {
+    await Chat.findOneAndUpdate({ id: c.id }, c, { upsert: true, new: true });
+  }
+  console.log('Chats seeded:', chatsData.length);
 
   console.log('\nRider Fleet seed completed successfully.');
   process.exit(0);

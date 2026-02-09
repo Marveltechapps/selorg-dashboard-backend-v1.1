@@ -19,6 +19,10 @@ const analyticsRoutes = require('./analyticsRoutes');
 const hsdRoutes = require('./hsdRoutes');
 const utilitiesRoutes = require('./utilitiesRoutes');
 const settingsRoutes = require('./settingsRoutes');
+const { dashboardHealth } = require('../../core/controllers/dashboardHealth.controller');
+
+// Health check (no auth required) - must be before router.use('/health', healthRoutes)
+router.get('/health', dashboardHealth('darkstore'));
 
 // Mount all routes under /darkstore prefix
 router.use('/auth', authRoutes);

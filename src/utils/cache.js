@@ -9,13 +9,21 @@
 
 const cacheService = require('../core/services/cache.service');
 
-// Re-export with backward-compatible API
+function safeDelByPattern(pattern) {
+  try {
+    if (typeof cacheService.delByPattern === 'function') {
+      return Promise.resolve(cacheService.delByPattern(pattern)).catch(() => 0);
+    }
+  } catch (_) { /* ignore */ }
+  return Promise.resolve(0);
+}
+
+// Re-export with backward-compatible API; never throw so controllers don't get 500 from cache
 module.exports = {
-  get: (key) => cacheService.get(key),
-  set: (key, value, ttlSeconds) => cacheService.set(key, value, ttlSeconds),
-  del: (key) => cacheService.del(key),
-  delByPattern: (pattern) => cacheService.delByPattern(pattern),
+  get: (key) => Promise.resolve(cacheService.get(key)).catch(() => null),
+  set: (key, value, ttlSeconds) => Promise.resolve(cacheService.set(key, value, ttlSeconds)).catch(() => false),
+  del: (key) => Promise.resolve(cacheService.del(key)).catch(() => false),
+  delByPattern: safeDelByPattern,
   cacheMiddleware: require('../core/middleware/cache.middleware').cacheMiddleware,
-  // Legacy: getRedisClient - return null as we use internal client now
   getRedisClient: () => null,
 };

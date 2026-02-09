@@ -61,11 +61,12 @@ const sendMessage = async (req, res, next) => {
     }
 
     const message = await communicationService.sendMessage(id, messageData);
-    
-    // Invalidate cache
-    await cache.delByPattern(`communication:chat:${id}:*`);
-    await cache.delByPattern('communication:chats:*');
-    
+
+    try {
+      await cache.delByPattern(`communication:chat:${id}:*`).catch(() => {});
+      await cache.delByPattern('communication:chats:*').catch(() => {});
+    } catch (_) { /* ignore cache errors */ }
+
     res.status(201).json(message);
   } catch (error) {
     logger.error('Error in sendMessage controller:', error);
@@ -87,11 +88,12 @@ const markChatAsRead = async (req, res, next) => {
   try {
     const { id } = req.params;
     const result = await communicationService.markChatAsRead(id);
-    
-    // Invalidate cache
-    await cache.delByPattern(`communication:chat:${id}:*`);
-    await cache.delByPattern('communication:chats:*');
-    
+
+    try {
+      await cache.delByPattern(`communication:chat:${id}:*`).catch(() => {});
+      await cache.delByPattern('communication:chats:*').catch(() => {});
+    } catch (_) { /* ignore */ }
+
     res.status(200).json(result);
   } catch (error) {
     logger.error('Error in markChatAsRead controller:', error);

@@ -37,6 +37,26 @@ async function listVendors(query) {
       { 'contact.email': { $regex: query.search, $options: 'i' } },
     ];
   }
+  // Exclude deleted vendors from the list (vendors with metadata.deleted === true)
+  // Use $or to handle cases where metadata might not exist
+  const deletedFilter = {
+    $or: [
+      { 'metadata.deleted': { $ne: true } },
+      { 'metadata.deleted': { $exists: false } }
+    ]
+  };
+  
+  // Combine filters - if we have $or from search, we need to use $and
+  if (filter.$or) {
+    filter.$and = [
+      { $or: filter.$or },
+      deletedFilter
+    ];
+    delete filter.$or;
+  } else {
+    Object.assign(filter, deletedFilter);
+  }
+  
   const total = await Vendor.countDocuments(filter);
   const data = await Vendor.find(filter)
     .skip((page - 1) * limit)
