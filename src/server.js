@@ -139,6 +139,9 @@ app.use('/api/v1/shared', sharedRoutes);
 
 // Legacy compatibility: Mount darkstore routes at /api/darkstore for frontend compatibility
 app.use('/api/darkstore', darkstoreRoutes);
+// Compatibility route: expose system-health at top-level for frontend compatibility
+// Some frontends call /api/v1/system-health/* instead of /api/v1/shared/system-health/*
+app.use('/api/v1/system-health', require('./shared/routes/systemHealthRoutes'));
 
 // API Documentation (Swagger)
 if (process.env.NODE_ENV !== 'production' || process.env.ENABLE_SWAGGER === 'true') {
