@@ -74,7 +74,7 @@ const getRiderById = async (riderId) => {
         },
         capacity: {
           currentLoad: 0,
-          maxLoad: 5
+          maxLoad: 10
         },
         avgEtaMins: 18,
         rating: 4.7,
@@ -110,7 +110,7 @@ const updateRider = async (riderId, updateData) => {
         },
         capacity: {
           currentLoad: 0,
-          maxLoad: 5
+          maxLoad: 10
         },
         avgEtaMins: 18,
         rating: 4.7,
@@ -325,7 +325,7 @@ const createRider = async (riderData) => {
     location: location || null,
     capacity: {
       currentLoad: 0,
-      maxLoad: capacity?.maxLoad || 5,
+      maxLoad: capacity?.maxLoad || 10,
     },
     avgEtaMins: 0,
     rating: 0,

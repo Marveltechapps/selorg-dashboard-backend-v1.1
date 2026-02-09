@@ -41,9 +41,32 @@ async function deleteCertificate(req, res, next) {
   }
 }
 
+async function updateCertificate(req, res, next) {
+  try {
+    const cert = await certificateService.updateCertificate(req.params.certificateId, req.body);
+    res.json(cert);
+  } catch (err) {
+    // Handle specific error cases
+    if (err.status === 404) {
+      return res.status(404).json({
+        success: false,
+        message: err.message || 'Certificate not found',
+      });
+    }
+    // Log error for debugging
+    console.error('Error updating certificate:', err);
+    res.status(500).json({
+      success: false,
+      message: err.message || 'Failed to update certificate',
+      error: process.env.NODE_ENV === 'development' ? err.stack : undefined,
+    });
+  }
+}
+
 module.exports = {
   listVendorCertificates,
   createVendorCertificate,
   getCertificate,
   deleteCertificate,
+  updateCertificate,
 };

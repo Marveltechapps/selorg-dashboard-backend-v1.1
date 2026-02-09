@@ -128,6 +128,17 @@ const getChatMessages = async (chatId, options = {}) => {
  */
 const sendMessage = async (chatId, messageData) => {
   try {
+    // Check MongoDB connection state
+    const mongoose = require('mongoose');
+    if (mongoose.connection.readyState !== 1) {
+      throw new Error('Database connection not ready. Please wait a moment and try again.');
+    }
+
+    // Validate input
+    if (!messageData || !messageData.content || typeof messageData.content !== 'string' || !messageData.content.trim()) {
+      throw new Error('Message content is required');
+    }
+
     const chat = await Chat.findOne({ id: chatId });
     if (!chat) {
       throw new Error('Chat not found');
@@ -138,21 +149,23 @@ const sendMessage = async (chatId, messageData) => {
       chatId,
       senderId: 'dispatch-1', // In real app, get from auth
       senderName: 'Dispatch',
-      content: messageData.content,
+      content: messageData.content.trim(),
       direction: 'outgoing',
       read: false,
     });
 
     await message.save();
+    logger.info('[communicationService.sendMessage] message saved', { chatId, messageId: message.id });
 
-    // Update chat
-    chat.lastMessage = messageData.content;
+    // Update chat metadata
+    chat.lastMessage = messageData.content.trim();
     chat.lastMessageTime = new Date();
+    chat.updatedAt = new Date();
     await chat.save();
 
-    const messageObj = message.toObject();
+    const messageObj = message.toObject ? message.toObject() : message;
     // Add timestamp field for frontend compatibility
-    messageObj.timestamp = messageObj.createdAt || messageObj.timestamp;
+    messageObj.timestamp = messageObj.createdAt || messageObj.timestamp || new Date().toISOString();
     
     return messageObj;
   } catch (error) {
@@ -191,27 +204,40 @@ const markChatAsRead = async (chatId) => {
  */
 const createBroadcast = async (broadcastData) => {
   try {
-    const broadcast = new Broadcast({
-      id: `broadcast-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    const broadcastId = `broadcast-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Use findOneAndUpdate with upsert to avoid collection creation issues
+    // Reusing 'messages' collection which already exists
+    const broadcastDoc = {
+      id: broadcastId,
+      documentType: 'broadcast', // Distinguish broadcasts from regular messages
       message: broadcastData.message,
       recipients: broadcastData.recipients,
       priority: broadcastData.priority || 'normal',
-      status: 'pending',
-      sentCount: 0,
+      status: 'sent', // Mark as sent immediately
+      sentCount: broadcastData.recipients.length,
       failedCount: 0,
-    });
+    };
 
-    await broadcast.save();
+    // Use findOneAndUpdate with upsert to avoid collection creation issues
+    // Query by both id and documentType to ensure we're working with broadcasts
+    const broadcast = await Broadcast.findOneAndUpdate(
+      { id: broadcastId, documentType: 'broadcast' },
+      { $set: broadcastDoc },
+      { upsert: true, new: true, runValidators: false }
+    );
 
-    // In a real implementation, this would send the broadcast to recipients
-    // For now, mark as sent
-    broadcast.status = 'sent';
-    broadcast.sentCount = broadcastData.recipients.length;
-    await broadcast.save();
+    if (!broadcast) {
+      throw new Error('Failed to create broadcast');
+    }
 
-    return broadcast.toObject();
+    return broadcast.toObject ? broadcast.toObject() : broadcast;
   } catch (error) {
     logger.error('Error creating broadcast:', error);
+    // If it's a collection limit error, provide a more helpful message
+    if (error.message && (error.message.includes('500 collections') || error.message.includes('cannot create a new collection'))) {
+      throw new Error('Database collection limit reached. Please delete unused collections or upgrade your MongoDB Atlas plan.');
+    }
     throw error;
   }
 };

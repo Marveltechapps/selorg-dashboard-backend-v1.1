@@ -5,7 +5,11 @@ const BroadcastSchema = new mongoose.Schema({
   id: {
     type: String,
     required: true,
-    unique: true,
+    index: true,
+  },
+  documentType: {
+    type: String,
+    default: 'broadcast',
     index: true,
   },
   message: {
@@ -39,10 +43,13 @@ const BroadcastSchema = new mongoose.Schema({
   },
 }, {
   timestamps: true,
-  collection: 'broadcasts',
+  collection: 'messages', // Reuse existing messages collection to avoid hitting MongoDB collection limit
 });
 
+// Compound unique index on id + documentType to avoid conflicts with messages in same collection
+BroadcastSchema.index({ id: 1, documentType: 1 }, { unique: true });
 BroadcastSchema.index({ status: 1, createdAt: -1 });
+BroadcastSchema.index({ documentType: 1, status: 1 }); // For querying broadcasts specifically
 
 const Broadcast = mongoose.model('Broadcast', BroadcastSchema);
 

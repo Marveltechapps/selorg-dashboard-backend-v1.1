@@ -16,6 +16,10 @@ const warehouseReportsRoutes = require('./warehouseReportsRoutes');
 const utilitiesRoutes = require('./utilitiesRoutes');
 const orderRoutes = require('./orderRoutes');
 const staffRoutes = require('./staffRoutes');
+const { dashboardHealth } = require('../../core/controllers/dashboardHealth.controller');
+
+// Health check (no auth required)
+router.get('/health', dashboardHealth('warehouse'));
 
 // Mount all routes
 router.use('/auth', authRoutes);

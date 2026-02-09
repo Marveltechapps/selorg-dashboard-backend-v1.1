@@ -46,9 +46,71 @@ async function revokeCertificate(id) {
   return;
 }
 
+async function updateCertificate(id, payload) {
+  console.log('updateCertificate called with:', { id, payload });
+  
+  const updateData = {};
+  if (payload.status) {
+    updateData.status = payload.status;
+  }
+  if (payload.expiresAt) {
+    updateData.expiresAt = payload.expiresAt instanceof Date ? payload.expiresAt : new Date(payload.expiresAt);
+  }
+  if (payload.issuedAt) {
+    updateData.issuedAt = payload.issuedAt instanceof Date ? payload.issuedAt : new Date(payload.issuedAt);
+  }
+  
+  // Check if id is a valid MongoDB ObjectId
+  const isValidObjectId = /^[0-9a-fA-F]{24}$/.test(id);
+  
+  let updated = null;
+  
+  if (isValidObjectId) {
+    // Use findByIdAndUpdate for atomic update
+    try {
+      updated = await Certificate.findByIdAndUpdate(
+        id,
+        { $set: updateData },
+        { new: true, runValidators: true }
+      );
+    } catch (err) {
+      console.error('findByIdAndUpdate failed:', err);
+      const mongoose = require('mongoose');
+      updated = await Certificate.findOneAndUpdate(
+        { _id: new mongoose.Types.ObjectId(id) },
+        { $set: updateData },
+        { new: true, runValidators: true }
+      );
+    }
+  }
+  
+  // If not found by _id, try finding by id field
+  if (!updated) {
+    updated = await Certificate.findOneAndUpdate(
+      { id: id },
+      { $set: updateData },
+      { new: true, runValidators: true }
+    );
+  }
+  
+  if (!updated) {
+    const err = new Error(`Certificate not found with ID: ${id}`);
+    err.status = 404;
+    throw err;
+  }
+  
+  console.log('Certificate updated successfully:', {
+    id: updated._id.toString(),
+    status: updated.status
+  });
+  
+  return updated.toObject();
+}
+
 module.exports = {
   listCertificatesByVendor,
   createCertificate,
   getCertificateById,
   revokeCertificate,
+  updateCertificate,
 };

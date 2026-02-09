@@ -32,6 +32,8 @@ const getAudits = asyncHandler(async (req, res) => {
     data: audits.map(audit => ({
       ...audit,
       id: audit._id.toString(),
+      vendorId: audit.vendorId, // Ensure vendorId is included
+      vendor: audit.vendor || audit.vendorName || audit.vendorId, // Add vendor name if available
       date: audit.date ? new Date(audit.date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : null,
     })),
     meta: {
@@ -72,9 +74,21 @@ const getAuditById = asyncHandler(async (req, res) => {
  * Create audit
  */
 const createAudit = asyncHandler(async (req, res) => {
+  // Validate required fields
+  if (!req.body.vendorId) {
+    return res.status(400).json({
+      success: false,
+      message: 'Vendor ID is required to schedule audit',
+    });
+  }
+
   const auditData = {
     ...req.body,
+    vendorId: req.body.vendorId,
     auditId: req.body.auditId || `AUD-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    auditType: req.body.auditType || 'Routine',
+    date: req.body.date ? new Date(req.body.date) : new Date(),
+    result: req.body.result || 'Pending',
   };
 
   const audit = new Audit(auditData);
@@ -287,12 +301,89 @@ const recalculateVendorRating = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * Update temperature compliance
+ */
+const updateTemperatureCompliance = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const updateData = req.body;
+  
+  console.log('updateTemperatureCompliance called with:', { id, updateData });
+  
+  const updateObj = {};
+  if (updateData.compliant !== undefined) {
+    updateObj.compliant = updateData.compliant;
+  }
+  if (updateData.notes) {
+    updateObj['metadata.notes'] = updateData.notes;
+    updateObj['metadata.updatedAt'] = new Date();
+  }
+  
+  // Check if id is a valid MongoDB ObjectId
+  const isValidObjectId = /^[0-9a-fA-F]{24}$/.test(id);
+  
+  let updated = null;
+  
+  if (isValidObjectId) {
+    // Use findByIdAndUpdate for atomic update
+    try {
+      updated = await TemperatureCompliance.findByIdAndUpdate(
+        id,
+        { $set: updateObj },
+        { new: true, runValidators: true }
+      );
+    } catch (err) {
+      console.error('findByIdAndUpdate failed:', err);
+      const mongoose = require('mongoose');
+      updated = await TemperatureCompliance.findOneAndUpdate(
+        { _id: new mongoose.Types.ObjectId(id) },
+        { $set: updateObj },
+        { new: true, runValidators: true }
+      );
+    }
+  }
+  
+  // If not found by _id, try finding by id field
+  if (!updated) {
+    updated = await TemperatureCompliance.findOneAndUpdate(
+      { id: id },
+      { $set: updateObj },
+      { new: true, runValidators: true }
+    );
+  }
+  
+  if (!updated) {
+    return res.status(404).json({
+      success: false,
+      message: `Temperature compliance record not found with ID: ${id}`,
+    });
+  }
+  
+  console.log('Temperature compliance updated successfully:', {
+    id: updated._id.toString(),
+    compliant: updated.compliant
+  });
+  
+  res.json({
+    success: true,
+    data: {
+      ...updated.toObject(),
+      id: updated._id.toString(),
+    },
+    meta: {
+      requestId: req.id,
+      timestamp: new Date().toISOString(),
+    },
+  });
+});
+
 module.exports = {
   getAudits,
   getAuditById,
   createAudit,
   getTemperatureCompliance,
   createTemperatureCompliance,
+  updateTemperatureCompliance,
   getVendorRatings,
   recalculateVendorRating,
 };
