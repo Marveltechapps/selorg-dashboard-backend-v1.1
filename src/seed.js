@@ -87,13 +87,9 @@ const seed = async () => {
       },
     ];
     
-    // Clear existing users (optional - comment out if you want to keep existing users)
-    const existingCount = await User.countDocuments();
-    if (existingCount > 0) {
-      logger.info(`Found ${existingCount} existing users. Clearing...`);
-      await User.deleteMany({});
-      logger.info('Existing users cleared');
-    }
+    // Ensure users exist (non-destructive).
+    // IMPORTANT: Do NOT delete existing users in production.
+    logger.info('Ensuring seed users exist (non-destructive).');
     
     // Insert users (skip if already exists)
     let createdCount = 0;
