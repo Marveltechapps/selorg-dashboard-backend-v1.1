@@ -21,11 +21,11 @@ jobs:
             set -e
 
             echo "============================="
-            echo "✅ BACKEND DEPLOYMENT STARTED"
+            echo "🚀 BACKEND DEPLOYMENT STARTED"
             echo "============================="
 
             BACKEND_DIR="/home/ubuntu/selorg/selorg-dashboard-backend-v1.1"
-            LOCAL_DOCKERFILE="/home/ubuntu/selorg/Dockerfiles/Dockerfile-backend"
+            DOCKERFILE="/home/ubuntu/selorg/Dockerfiles/Dockerfile-backend"
             ENV_FILE="/home/ubuntu/selorg/envs/backend.env"
 
             IMAGE_NAME="selorg-backend"
@@ -44,19 +44,23 @@ jobs:
             LATEST_IMAGE="${IMAGE_NAME}:latest"
             BACKUP_IMAGE="${IMAGE_NAME}:backup"
 
-            echo "📌 Backup current latest image"
+            echo "📌 Commit: $COMMIT"
+            echo "🐳 New image: $NEW_IMAGE"
+
+            echo "📦 Backup previous image"
             sudo docker image inspect $LATEST_IMAGE >/dev/null 2>&1 && sudo docker tag $LATEST_IMAGE $BACKUP_IMAGE || true
 
             echo "🐳 Build new backend image"
-            sudo docker build -t $NEW_IMAGE -f $LOCAL_DOCKERFILE .
+            sudo docker build -t $NEW_IMAGE -f $DOCKERFILE .
 
+            echo "🏷 Tag as latest"
             sudo docker tag $NEW_IMAGE $LATEST_IMAGE
 
-            echo "🛑 Remove old container"
+            echo "🛑 Stop & remove old container"
             sudo docker stop $CONTAINER_NAME || true
             sudo docker rm $CONTAINER_NAME || true
 
-            echo "🚀 Run new container (PRIVATE PORT)"
+            echo "🚀 Start new backend container (private)"
             sudo docker run -d \
               --name $CONTAINER_NAME \
               --restart always \
@@ -64,19 +68,23 @@ jobs:
               --env-file $ENV_FILE \
               $LATEST_IMAGE
 
-            echo "⏳ Wait for backend boot"
+            echo "⏳ Waiting for backend boot..."
             sleep 8
 
-            echo "🔍 Health check"
-            if curl -f http://127.0.0.1:5000 >/dev/null 2>&1; then
+            echo "🔍 Health check (/health)"
+            if curl -f http://127.0.0.1:5000/health >/dev/null 2>&1; then
               echo "✅ Backend deployed successfully!"
             else
-              echo "❌ Backend failed. Rolling back..."
+              echo "❌ Deployment failed — starting rollback..."
 
+              echo "📜 Last logs:"
               sudo docker logs $CONTAINER_NAME --tail 80 || true
-              sudo docker rm -f $CONTAINER_NAME || true
+
+              sudo docker stop $CONTAINER_NAME || true
+              sudo docker rm $CONTAINER_NAME || true
 
               if sudo docker image inspect $BACKUP_IMAGE >/dev/null 2>&1; then
+                echo "⏪ Rolling back to previous version"
                 sudo docker tag $BACKUP_IMAGE $LATEST_IMAGE
                 sudo docker run -d \
                   --name $CONTAINER_NAME \
@@ -84,15 +92,16 @@ jobs:
                   -p 127.0.0.1:5000:5000 \
                   --env-file $ENV_FILE \
                   $LATEST_IMAGE
-                echo "✅ Rollback completed"
+                echo "✅ Rollback successful"
               else
-                echo "⚠️ No backup image found"
+                echo "⚠️ No backup image available!"
                 exit 1
               fi
             fi
 
+            echo "🧹 Cleaning unused docker images"
             sudo docker image prune -af
 
             echo "============================="
-            echo "✅ BACKEND DEPLOYMENT FINISHED"
+            echo "🎉 BACKEND DEPLOYMENT FINISHED"
             echo "============================="
