@@ -1,0 +1,545 @@
+{
+  "info": {
+    "name": "Rider App API",
+    "description": "Backend API collection for Rider App. Set `baseUrl` (e.g. http://localhost:5000) and use Send OTP → Verify OTP to get `accessToken` for protected endpoints.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5000" },
+    { "key": "accessToken", "value": "" },
+    { "key": "orderId", "value": "" },
+    { "key": "riderId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/healthz",
+            "description": "No auth. Returns status and timestamp."
+          }
+        },
+        {
+          "name": "WebSocket health",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/websocket/health",
+            "description": "Requires Bearer token."
+          }
+        },
+        {
+          "name": "Diagnostics",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/diagnostics",
+            "description": "Requires Bearer token. Returns routes, websocket status, server info."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Send OTP",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phoneNumber\": \"+919876543210\",\n  \"userType\": \"rider\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/auth/send-otp",
+            "description": "Key-value: phoneNumber (10–15 digits, e.g. +919876543210), userType (optional, default rider). Sends real-time OTP via SMS if config.json smsvendor is set."
+          }
+        },
+        {
+          "name": "Verify OTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-device-id", "value": "postman-device-1" },
+              { "key": "x-device-name", "value": "Postman" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phoneNumber\": \"+919876543210\",\n  \"code\": \"123456\",\n  \"userType\": \"rider\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/auth/verify-otp",
+            "description": "Key-value: phoneNumber, code (6 digits), sessionId (optional), userType (optional). Access token is auto-saved to collection variable.",
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "var json = pm.response.json();",
+                    "if (json && json.tokens && json.tokens.accessToken) {",
+                    "  pm.collectionVariables.set('accessToken', json.tokens.accessToken);",
+                    "  pm.collectionVariables.set('riderId', json.riderId || '');",
+                    "}"
+                  ],
+                  "type": "text/javascript"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "Refresh token",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{accessToken}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/auth/refresh-token",
+            "description": "Key-value: refreshToken (from verify-otp response)."
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/auth/logout",
+            "description": "Requires Bearer token. Stateless; client should discard token."
+          }
+        },
+        {
+          "name": "Me (profile)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/auth/me",
+            "description": "Returns current rider profile."
+          }
+        },
+        {
+          "name": "MFA Setup",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"riderId\": \"\"\n}" },
+            "url": "{{baseUrl}}/api/v1/auth/mfa/setup",
+            "description": "Body: riderId (optional, taken from token). Returns secret and QR URI."
+          }
+        },
+        {
+          "name": "MFA Verify",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"riderId\": \"\",\n  \"token\": \"123456\"\n}" },
+            "url": "{{baseUrl}}/api/v1/auth/mfa/verify",
+            "description": "Body: riderId, token (6-digit TOTP)."
+          }
+        },
+        {
+          "name": "MFA Enable",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"riderId\": \"\",\n  \"token\": \"123456\"\n}" },
+            "url": "{{baseUrl}}/api/v1/auth/mfa/enable"
+          }
+        },
+        {
+          "name": "MFA Disable",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"riderId\": \"\",\n  \"token\": \"123456\"\n}" },
+            "url": "{{baseUrl}}/api/v1/auth/mfa/disable"
+          }
+        },
+        {
+          "name": "MFA Status",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/auth/mfa/status"
+          }
+        },
+        {
+          "name": "MFA Verify backup code",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"riderId\": \"\",\n  \"code\": \"ABCD1234\"\n}" },
+            "url": "{{baseUrl}}/api/v1/auth/mfa/verify-backup",
+            "description": "Body: riderId, code (8–10 chars)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Delivery (Riders)",
+      "item": [
+        {
+          "name": "Create rider",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"John Rider\",\n  \"phoneNumber\": \"+919876543210\",\n  \"email\": \"john@example.com\",\n  \"vehicleType\": \"bike\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/delivery/riders",
+            "description": "Key-value: name (min 2), phoneNumber, email (optional), vehicleType: bike | scooter | bicycle. No auth."
+          }
+        },
+        {
+          "name": "Get rider by ID",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/delivery/riders/{{riderId}}",
+            "description": "Path: riderId. Returns rider; only same rider can access."
+          }
+        },
+        {
+          "name": "Update rider location",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lat\": 12.9716,\n  \"lng\": 77.5946\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/delivery/riders/{{riderId}}/location",
+            "description": "Body: lat (-90 to 90), lng (-180 to 180)."
+          }
+        },
+        {
+          "name": "Start shift",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"warehouseCode\": \"WH001\"\n}" },
+            "url": "{{baseUrl}}/api/v1/delivery/riders/{{riderId}}/shift/start",
+            "description": "Body: warehouseCode (min 3 chars)."
+          }
+        },
+        {
+          "name": "End shift",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/delivery/riders/{{riderId}}/shift/end"
+          }
+        },
+        {
+          "name": "Set availability",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"availability\": \"available\"\n}" },
+            "url": "{{baseUrl}}/api/v1/delivery/riders/{{riderId}}/availability",
+            "description": "Body: availability: available | busy | offline."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Orders",
+      "item": [
+        {
+          "name": "Get order by ID",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/orders/{{orderId}}",
+            "description": "Path: orderId. Only rider assigned to order can access."
+          }
+        },
+        {
+          "name": "List my orders (admin)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/orders/admin/orders?status=&warehouseCode=&limit=50",
+            "description": "Query: status (optional), warehouseCode (optional), limit (default 50). Returns orders for logged-in rider."
+          }
+        },
+        {
+          "name": "Accept order",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/orders/{{orderId}}/accept"
+          }
+        },
+        {
+          "name": "Reject order",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"reason\": \"Not available\"\n}" },
+            "url": "{{baseUrl}}/api/v1/orders/{{orderId}}/reject",
+            "description": "Body: reason (optional string)."
+          }
+        },
+        {
+          "name": "Mark order picked",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/orders/{{orderId}}/pick"
+          }
+        },
+        {
+          "name": "Mark out for delivery",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/orders/{{orderId}}/out-for-delivery"
+          }
+        },
+        {
+          "name": "Mark delivered",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"otp\",\n  \"value\": \"123456\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/orders/{{orderId}}/deliver",
+            "description": "Body (optional): proofOfDelivery with type: otp | signature | photo, value: string."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Payouts",
+      "item": [
+        {
+          "name": "Request payout",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"periodStart\": \"2025-02-01\",\n  \"periodEnd\": \"2025-02-14\",\n  \"method\": \"upi\",\n  \"accountDetails\": {\n    \"upiId\": \"rider@paytm\",\n    \"accountNumber\": \"\",\n    \"ifscCode\": \"\",\n    \"bankName\": \"\",\n    \"accountHolderName\": \"\"\n  }\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/payouts/request",
+            "description": "Key-value: periodStart, periodEnd (ISO date), method: bank_transfer | upi | wallet, accountDetails (upiId or accountNumber/ifscCode etc)."
+          }
+        },
+        {
+          "name": "List payouts",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/payouts?limit=20",
+            "description": "Query: limit (default 20)."
+          }
+        },
+        {
+          "name": "Payout statement",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/payouts/statement?startDate=2025-02-01&endDate=2025-02-14",
+            "description": "Query: startDate, endDate (ISO dates)."
+          }
+        },
+        {
+          "name": "Get payout by ID",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/payouts/:id",
+            "description": "Path: id (payout ID)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Incidents",
+      "item": [
+        {
+          "name": "Create incident",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"accident\",\n  \"description\": \"Minor collision at crossing, no injuries.\",\n  \"location\": {\n    \"lat\": 12.9716,\n    \"lng\": 77.5946,\n    \"address\": \"MG Road, Bangalore\"\n  },\n  \"priority\": \"high\",\n  \"photos\": []\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/incidents",
+            "description": "Key-value: type: accident | customer_issue | vehicle_breakdown | safety_concern | other; description (10–2000 chars); location (optional) lat, lng, address; photos (optional array); priority (optional): low | medium | high | urgent."
+          }
+        },
+        {
+          "name": "List my incidents",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/incidents?limit=20",
+            "description": "Query: limit (default 20)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Operations",
+      "item": [
+        {
+          "name": "Get inventory",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/operations/inventory?warehouseCode=&status=available",
+            "description": "Query: warehouseCode (optional), status (optional): available | low | reserved | damaged | all."
+          }
+        },
+        {
+          "name": "Get inventory item",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/operations/inventory/:id",
+            "description": "Path: id (inventory item ID)."
+          }
+        },
+        {
+          "name": "Update inventory item",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"available\",\n  \"quantityAvailable\": 10,\n  \"quantityReserved\": 0\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/operations/inventory/:id",
+            "description": "Body: status (optional), quantityAvailable (optional), quantityReserved (optional)."
+          }
+        },
+        {
+          "name": "Get fulfillment tasks",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/operations/fulfillment?warehouseCode=",
+            "description": "Query: warehouseCode (optional)."
+          }
+        },
+        {
+          "name": "Advance fulfillment task",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/operations/fulfillment/:id/advance",
+            "description": "Path: id (task ID)."
+          }
+        },
+        {
+          "name": "Get warehouses",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/operations/warehouses"
+          }
+        }
+      ]
+    },
+    {
+      "name": "KYC",
+      "item": [
+        {
+          "name": "Get document types",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/kyc/document-types",
+            "description": "No auth. Returns list of KYC document types."
+          }
+        },
+        {
+          "name": "Get KYC status",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/kyc/status",
+            "description": "Returns current user's document statuses."
+          }
+        },
+        {
+          "name": "Upload KYC document",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}" }] },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file", "type": "file", "src": "", "description": "Document image/PDF" },
+                { "key": "documentTypeCode", "value": "aadhaar", "description": "From document-types list" }
+              ]
+            },
+            "url": "{{baseUrl}}/api/v1/kyc/upload",
+            "description": "Form-data: file (required), documentTypeCode or documentType (required)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Content",
+      "item": [
+        {
+          "name": "Get FAQ by key",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/content/faq/:key?locale=en",
+            "description": "Path: key (FAQ key). Query: locale (optional, default en). No auth."
+          }
+        }
+      ]
+    }
+  ]
+}
