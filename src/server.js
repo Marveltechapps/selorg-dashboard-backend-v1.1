@@ -27,11 +27,39 @@ const adminRoutes = require('./admin/routes');
 const darkstoreRoutes = require('./darkstore/routes');
 const financeRoutes = require('./finance/routes');
 const warehouseRoutes = require('./warehouse/routes');
-const riderRoutes = require('./rider/routes');
 const sharedRoutes = require('./shared/routes');
 const hhdApp = require('./hhd/app');
 const pickerApp = require('./picker/app');
 const customerApp = require('./customer-backend/app');
+
+// Rider routing: prefer v2 modules when present, but fall back to legacy implementation.
+// This allows a gradual migration by keeping v2 code in src/rider_v2_backend while
+// preserving the existing `/api/v1/rider` paths.
+let riderRoutes;
+try {
+  // v2 router for delivery (keeps internal v2 structure separate)
+  riderRoutes = require('./rider_v2_backend/src/modules/delivery/rider.router.js');
+  logger.info('Mounted rider_v2 delivery router for /api/v1/rider');
+} catch (err) {
+  // Fallback to legacy router
+  riderRoutes = require('./rider/routes');
+  logger.info('Mounted legacy rider router for /api/v1/rider');
+}
+
+// Also mount v2 routers for orders, payouts, incidents if available so their endpoints
+// are handled by the v2 implementation while preserving existing paths.
+function tryRequire(relPath) {
+  try {
+    // eslint-disable-next-line global-require, import/no-dynamic-require
+    return require(relPath);
+  } catch (e) {
+    return null;
+  }
+}
+const v2OrderRouter = tryRequire('./rider_v2_backend/src/modules/orders/order.router.js');
+const v2PayoutRouter = tryRequire('./rider_v2_backend/src/modules/payouts/payout.router.js');
+const v2IncidentRouter = tryRequire('./rider_v2_backend/src/modules/incidents/incident.router.js');
+const v2AuthRouter = tryRequire('./rider_v2_backend/src/modules/auth/auth.router.js');
 
 // Validate critical environment variables on startup (skip in test mode)
 if (process.env.NODE_ENV !== 'test') {
@@ -155,7 +183,28 @@ app.use((req, res, next) => {
 app.use('/api/v1/darkstore', darkstoreRoutes);
 app.use('/api/v1/production', productionRoutes);
 app.use('/api/v1/merch', merchRoutes);
+
+// Rider & related endpoints: prefer v2 routers when present (mounted first to take precedence)
+if (v2OrderRouter) {
+  app.use('/api/v1/orders', v2OrderRouter);
+  logger.info('Mounted rider_v2 orders router at /api/v1/orders');
+}
+if (v2PayoutRouter) {
+  app.use('/api/v1/payouts', v2PayoutRouter);
+  logger.info('Mounted rider_v2 payouts router at /api/v1/payouts');
+}
+if (v2IncidentRouter) {
+  app.use('/api/v1/incidents', v2IncidentRouter);
+  logger.info('Mounted rider_v2 incidents router at /api/v1/incidents');
+}
+if (v2AuthRouter) {
+  app.use('/api/v1/auth', v2AuthRouter);
+  logger.info('Mounted rider_v2 auth router at /api/v1/auth');
+}
+
+// Mount delivery/rider router (v2 or legacy)
 app.use('/api/v1/rider', riderRoutes);
+
 app.use('/api/v1/finance', financeRoutes);
 app.use('/api/v1/vendor', vendorRoutes);
 app.use('/api/v1/warehouse', warehouseRoutes);
