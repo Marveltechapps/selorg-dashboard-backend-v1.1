@@ -29,6 +29,9 @@ const financeRoutes = require('./finance/routes');
 const warehouseRoutes = require('./warehouse/routes');
 const riderRoutes = require('./rider/routes');
 const sharedRoutes = require('./shared/routes');
+const hhdApp = require('./hhd/app');
+const pickerApp = require('./picker/app');
+const customerApp = require('./customer-backend/app');
 
 // Validate critical environment variables on startup (skip in test mode)
 if (process.env.NODE_ENV !== 'test') {
@@ -42,6 +45,8 @@ if (process.env.NODE_ENV !== 'test') {
 
   // Connect to database
   connectDB();
+  // Customer app startup (index creation); runs when DB is connected
+  require('./customer-backend/startup').run();
 }
 
 const app = express();
@@ -91,30 +96,60 @@ app.use(compression());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// CORS configuration - restrict to allowed origins
+// CORS configuration - allow mobile apps (Expo, React Native) and dashboard
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
-  : ['http://localhost:3000', 'http://localhost:5173']; // Default for development
+  : [
+      'http://localhost:3000',
+      'http://localhost:5173',
+      'http://localhost:8081',
+      'http://localhost:19006',
+      'http://127.0.0.1:3000',
+      'http://127.0.0.1:5173',
+      'http://127.0.0.1:8081',
+      'http://127.0.0.1:19006',
+    ];
 
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      // Allow requests with no origin (mobile apps, Postman, etc.)
-      if (!origin) return callback(null, true);
-      
-      if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV === 'development') {
-        callback(null, true);
-      } else {
-        logger.warn('CORS blocked origin', { origin, allowedOrigins });
-        callback(new Error('Not allowed by CORS'));
-      }
-    },
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID'],
-    exposedHeaders: ['X-Request-ID'],
-  })
-);
+// Allow any localhost/127.0.0.1/0.0.0.0 origin (any port) so Expo/Metro/customer app always work
+const isLocalOrigin = (o) =>
+  typeof o === 'string' &&
+  /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?$/i.test(o.trim());
+
+// Expo / React Native can send exp:// or http(s) with LAN IP; allow so customer app never gets 403
+const isExpoOrMobileOrigin = (o) =>
+  typeof o === 'string' &&
+  (o.trim().startsWith('exp://') ||
+    /^https?:\/\/(192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$/i.test(o.trim()));
+
+const strictCors = cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, Postman, curl, etc.)
+    if (!origin || origin === 'null' || origin === '') return callback(null, true);
+    // Allow any localhost/127.0.0.1/0.0.0.0 with any port (Expo web, Metro, customer app)
+    if (isLocalOrigin(origin)) return callback(null, true);
+    // Allow Expo (exp://) and common mobile dev origins (LAN IP + 172.16-31) so customer app works even if NODE_ENV=production
+    if (isExpoOrMobileOrigin(origin)) return callback(null, true);
+    // In non-production (including NODE_ENV unset), allow any origin
+    if (process.env.NODE_ENV !== 'production') return callback(null, true);
+    if (allowedOrigins.indexOf(origin) !== -1) return callback(null, true);
+    logger.warn('CORS blocked origin', { origin, allowedOrigins });
+    callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID'],
+  exposedHeaders: ['X-Request-ID'],
+  optionsSuccessStatus: 204,
+  preflightContinue: false,
+});
+
+const customerCors = cors({ origin: true, credentials: true });
+
+app.use((req, res, next) => {
+  const isCustomerPath = req.path.startsWith('/api/v1/customer');
+  if (isCustomerPath) return customerCors(req, res, next);
+  return strictCors(req, res, next);
+});
 
 // Mount dashboard routers under /api/v1/<dashboard-name>
 app.use('/api/v1/darkstore', darkstoreRoutes);
@@ -127,8 +162,10 @@ app.use('/api/v1/warehouse', warehouseRoutes);
 app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/shared', sharedRoutes);
 
-// Legacy compatibility: Mount darkstore routes at /api/darkstore for frontend compatibility
-app.use('/api/darkstore', darkstoreRoutes);
+// HHD, Picker, and Customer APIs – unified backend (versioned)
+app.use('/api/v1/hhd', hhdApp);
+app.use('/api/v1/picker', pickerApp);
+app.use('/api/v1/customer', customerApp); // Customer app: onboarding, auth, home, products, user
 
 // API Documentation (Swagger)
 if (process.env.NODE_ENV !== 'production' || process.env.ENABLE_SWAGGER === 'true') {
@@ -170,6 +207,9 @@ const httpServer = createServer(app);
 // Initialize WebSocket (skip in test mode)
 if (process.env.NODE_ENV !== 'test') {
   websocketService.initialize(httpServer);
+  // HHD Socket.IO for real-time order updates
+  const { initSocketIO } = require('./hhd/config/socket');
+  initSocketIO(httpServer);
 }
 
 // Start server (only if not in test mode)

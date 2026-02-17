@@ -1,33 +1,17 @@
-<<<<<<< HEAD
 const express = require('express');
 const router = express.Router();
 const approvalsController = require('../controllers/approvalsController');
+const { cacheMiddleware } = require('../../core/middleware');
+const appConfig = require('../../config/app');
 
-// Approvals endpoints
-router.get('/summary', approvalsController.getApprovalSummary);
-router.get('/queue', approvalsController.listApprovals);
+// Approvals endpoints (GETs cached)
+router.get('/summary', cacheMiddleware(appConfig.cache.approvals), approvalsController.getApprovalSummary);
+router.get('/queue', cacheMiddleware(appConfig.cache.approvals), approvalsController.listApprovals);
 router.post('/queue', approvalsController.createApprovalRequest);
-router.get('/queue/:id', approvalsController.getApprovalById);
+router.get('/queue/:id', cacheMiddleware(appConfig.cache.approvals), approvalsController.getApprovalById);
 router.post('/queue/:id/approve', approvalsController.approveRequest);
 router.post('/queue/:id/reject', approvalsController.rejectRequest);
 router.post('/batch-approve', approvalsController.batchApprove);
 
 module.exports = router;
 
-=======
-const express = require('express');
-const router = express.Router();
-const approvalsController = require('../controllers/approvalsController');
-
-// Approvals endpoints
-router.get('/summary', approvalsController.getApprovalSummary);
-router.get('/queue', approvalsController.listApprovals);
-router.post('/queue', approvalsController.createApprovalRequest);
-router.get('/queue/:id', approvalsController.getApprovalById);
-router.post('/queue/:id/approve', approvalsController.approveRequest);
-router.post('/queue/:id/reject', approvalsController.rejectRequest);
-router.post('/batch-approve', approvalsController.batchApprove);
-
-module.exports = router;
-
->>>>>>> 6591dc33a9b88417e6a52adeaff72e27b1dee13a

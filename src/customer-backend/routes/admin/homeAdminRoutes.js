@@ -1,0 +1,27 @@
+const { Router } = require('express');
+const homeAdminController = require('../../controllers/admin/homeAdminController');
+
+const router = Router();
+router.get('/categories', homeAdminController.listCategories);
+router.post('/categories', homeAdminController.createCategory);
+router.put('/categories/:id', homeAdminController.updateCategory);
+router.delete('/categories/:id', homeAdminController.deleteCategory);
+router.get('/banners', homeAdminController.listBanners);
+router.post('/banners', homeAdminController.createBanner);
+router.put('/banners/:id', homeAdminController.updateBanner);
+router.delete('/banners/:id', homeAdminController.deleteBanner);
+router.get('/config', homeAdminController.getHomeConfig);
+router.post('/config', homeAdminController.upsertHomeConfig);
+router.get('/sections', homeAdminController.listHomeSections);
+router.post('/sections', homeAdminController.createHomeSection);
+router.put('/sections/:id', homeAdminController.updateHomeSection);
+router.delete('/sections/:id', homeAdminController.deleteHomeSection);
+router.get('/lifestyle', homeAdminController.listLifestyle);
+router.post('/lifestyle', homeAdminController.createLifestyle);
+router.put('/lifestyle/:id', homeAdminController.updateLifestyle);
+router.delete('/lifestyle/:id', homeAdminController.deleteLifestyle);
+router.get('/promoblocks', homeAdminController.listPromoBlocks);
+router.post('/promoblocks', homeAdminController.createPromoBlock);
+router.put('/promoblocks/:id', homeAdminController.updatePromoBlock);
+router.delete('/promoblocks/:id', homeAdminController.deletePromoBlock);
+module.exports = router;

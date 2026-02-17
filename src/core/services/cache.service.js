@@ -257,6 +257,34 @@ class CacheService {
   }
 
   /**
+   * Get cache stats for admin/monitoring (keys count, memory).
+   * Returns { connected, keysCount, memoryUsed } when Redis is available.
+   */
+  async getStats() {
+    if (!this.client?.isOpen) {
+      await this.connect();
+    }
+    if (!this.client?.isOpen) {
+      return { connected: false, keysCount: 0, memoryUsed: null };
+    }
+    try {
+      const [dbSize, memoryInfo] = await Promise.all([
+        this.client.dbSize(),
+        this.client.info('memory').catch(() => ''),
+      ]);
+      let memoryUsed = null;
+      if (memoryInfo && typeof memoryInfo === 'string') {
+        const m = memoryInfo.match(/used_memory_human:(\S+)/);
+        if (m) memoryUsed = m[1];
+      }
+      return { connected: true, keysCount: dbSize ?? 0, memoryUsed };
+    } catch (err) {
+      logger.warn('Cache getStats error', { error: err.message });
+      return { connected: this.client?.isOpen === true, keysCount: 0, memoryUsed: null };
+    }
+  }
+
+  /**
    * Close Redis connection
    */
   async disconnect() {

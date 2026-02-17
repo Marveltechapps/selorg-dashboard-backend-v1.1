@@ -101,6 +101,7 @@ const validateEnvironment = () => {
     port: process.env.PORT || '5000',
     hasMongoURI: !!mongoUri,
     hasJWTSecret: !!process.env.JWT_SECRET,
+    hasCustomerJWTSecret: !!process.env.CUSTOMER_JWT_SECRET,
     hasAllowedOrigins: !!process.env.ALLOWED_ORIGINS,
   });
 };

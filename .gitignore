@@ -31,6 +31,11 @@ Thumbs.db
 *.swo
 *~
 
+# Cursor
+.cursor/
+.cursorrules
+.cursorignore
+
 # Test outputs
 test-results/
 playwright-report/

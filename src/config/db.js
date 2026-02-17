@@ -23,4 +23,24 @@ const connectDB = async () => {
   }
 };
 
+function isConnected() {
+  return mongoose.connection.readyState === 1;
+}
+
+async function waitForConnection(timeoutMs = 10000) {
+  if (isConnected()) return;
+  return new Promise((resolve, reject) => {
+    const start = Date.now();
+    const check = () => {
+      if (isConnected()) return resolve();
+      if (Date.now() - start > timeoutMs) return reject(new Error('MongoDB connection timeout'));
+      setTimeout(check, 100);
+    };
+    check();
+  });
+}
+
 module.exports = connectDB;
+module.exports.isConnected = isConnected;
+module.exports.waitForConnection = waitForConnection;
+module.exports.mongoose = mongoose;

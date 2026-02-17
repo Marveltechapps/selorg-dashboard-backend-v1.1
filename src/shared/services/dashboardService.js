@@ -79,17 +79,17 @@ const getDashboardSummary = async () => {
     });
 
     return {
-      activeRiders,
-      maxRiders,
-      busyRiders,
-      idleRiders,
-      activeRiderUtilizationPercent,
-      fleetUtilizationPercent, // Overall fleet utilization (active/total)
-      ordersInTransit,
-      ordersInTransitChangePercent: Math.round(ordersInTransitChangePercent * 100) / 100,
-      avgDeliveryTimeSeconds,
-      avgDeliveryTimeWithinSla,
-      slaBreaches,
+      activeRiders: activeRiders ?? 0,
+      maxRiders: maxRiders ?? 0,
+      busyRiders: busyRiders ?? 0,
+      idleRiders: idleRiders ?? 0,
+      activeRiderUtilizationPercent: activeRiderUtilizationPercent ?? 0,
+      fleetUtilizationPercent: fleetUtilizationPercent ?? 0,
+      ordersInTransit: ordersInTransit ?? 0,
+      ordersInTransitChangePercent: Math.round((ordersInTransitChangePercent ?? 0) * 100) / 100,
+      avgDeliveryTimeSeconds: avgDeliveryTimeSeconds ?? 0,
+      avgDeliveryTimeWithinSla: Boolean(avgDeliveryTimeWithinSla),
+      slaBreaches: slaBreaches ?? 0,
     };
   } catch (error) {
     logger.error('Error calculating dashboard summary:', error);
