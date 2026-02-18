@@ -1,107 +1,97 @@
 name: Deploy Selorg Dashboard Backend (Rollback Safe)
 
 on:
-  push:
-    branches:
-      - main
+push:
+branches: ["Code_Updation_1.2.11"]
 
 jobs:
-  deploy:
-    runs-on: ubuntu-latest
+deploy:
+runs-on: ubuntu-latest
 
-    steps:
-      - name: Deploy Backend to EC2
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ubuntu
-          key: ${{ secrets.EC2_SSH_KEY }}
-          port: ${{ secrets.EC2_PORT }}
-          script: |
-            set -e
+```
+steps:
+  - name: Deploy Backend to EC2
+    uses: appleboy/ssh-action@v1.0.3
+    with:
+      host: ${{ secrets.EC2_HOST }}
+      username: ubuntu
+      key: ${{ secrets.EC2_SSH_KEY }}
+      port: ${{ secrets.EC2_PORT }}
+      script: |
+        set -e
 
-            echo "============================="
-            echo "🚀 BACKEND DEPLOYMENT STARTED"
-            echo "============================="
+        echo "============================="
+        echo "🚀 BACKEND DEPLOYMENT STARTED"
+        echo "============================="
 
-            BACKEND_DIR="/home/ubuntu/selorg/selorg-dashboard-backend-v1.1"
-            DOCKERFILE="/home/ubuntu/selorg/Dockerfiles/Dockerfile-backend"
-            ENV_FILE="/home/ubuntu/selorg/envs/backend.env"
+        BACKEND_DIR="/home/ubuntu/selorg/selorg-dashboard-backend-v1.1"
+        DOCKERFILE="/home/ubuntu/selorg/Dockerfiles/Dockerfile-backend"
+        ENV_FILE="/home/ubuntu/selorg/envs/backend.env"
 
-            IMAGE_NAME="selorg-backend"
-            CONTAINER_NAME="selorg-backend"
+        IMAGE_NAME="selorg-backend"
+        CONTAINER_NAME="selorg-backend"
+        BRANCH="Code_Updation_1.2.11"
 
-            echo "➡️ Go to backend directory"
-            cd $BACKEND_DIR
+        cd $BACKEND_DIR
 
-            echo "🧹 Clean repo & pull latest code"
-            git reset --hard
-            git clean -fd
-            git pull origin main
+        echo "🧹 Sync repository"
+        git fetch origin
+        git checkout $BRANCH
+        git reset --hard origin/$BRANCH
+        git clean -fd
 
-            COMMIT=$(git rev-parse --short HEAD)
-            NEW_IMAGE="${IMAGE_NAME}:${COMMIT}"
-            LATEST_IMAGE="${IMAGE_NAME}:latest"
-            BACKUP_IMAGE="${IMAGE_NAME}:backup"
+        COMMIT=$(git rev-parse --short HEAD)
+        NEW_IMAGE="${IMAGE_NAME}:${COMMIT}"
+        LATEST_IMAGE="${IMAGE_NAME}:latest"
+        BACKUP_IMAGE="${IMAGE_NAME}:backup"
 
-            echo "📌 Commit: $COMMIT"
-            echo "🐳 New image: $NEW_IMAGE"
+        echo "📦 Backup previous image"
+        sudo docker image inspect $LATEST_IMAGE >/dev/null 2>&1 && sudo docker tag $LATEST_IMAGE $BACKUP_IMAGE || true
 
-            echo "📦 Backup previous image"
-            sudo docker image inspect $LATEST_IMAGE >/dev/null 2>&1 && sudo docker tag $LATEST_IMAGE $BACKUP_IMAGE || true
+        echo "🐳 Build new backend image"
+        sudo docker build -t $NEW_IMAGE -f $DOCKERFILE .
 
-            echo "🐳 Build new backend image"
-            sudo docker build -t $NEW_IMAGE -f $DOCKERFILE .
+        sudo docker tag $NEW_IMAGE $LATEST_IMAGE
 
-            echo "🏷 Tag as latest"
-            sudo docker tag $NEW_IMAGE $LATEST_IMAGE
+        echo "🛑 Remove old container"
+        sudo docker stop $CONTAINER_NAME || true
+        sudo docker rm $CONTAINER_NAME || true
 
-            echo "🛑 Stop & remove old container"
-            sudo docker stop $CONTAINER_NAME || true
-            sudo docker rm $CONTAINER_NAME || true
+        echo "🚀 Start new container"
+        sudo docker run -d \
+          --name $CONTAINER_NAME \
+          --restart always \
+          --network selorg-net \
+          -p 127.0.0.1:5000:5000 \
+          --env-file $ENV_FILE \
+          $LATEST_IMAGE
 
-            echo "🚀 Start new backend container (private)"
+        sleep 8
+
+        if curl -f http://127.0.0.1:5000/health >/dev/null 2>&1; then
+          echo "✅ Deployment successful"
+        else
+          echo "❌ Deployment failed → rollback"
+
+          sudo docker logs $CONTAINER_NAME --tail 80 || true
+          sudo docker rm -f $CONTAINER_NAME || true
+
+          if sudo docker image inspect $BACKUP_IMAGE >/dev/null 2>&1; then
+            sudo docker tag $BACKUP_IMAGE $LATEST_IMAGE
             sudo docker run -d \
               --name $CONTAINER_NAME \
               --restart always \
+              --network selorg-net \
               -p 127.0.0.1:5000:5000 \
               --env-file $ENV_FILE \
               $LATEST_IMAGE
+          else
+            echo "No backup image"
+            exit 1
+          fi
+        fi
 
-            echo "⏳ Waiting for backend boot..."
-            sleep 8
+        sudo docker image prune -af
 
-            echo "🔍 Health check (/health)"
-            if curl -f http://127.0.0.1:5000/health >/dev/null 2>&1; then
-              echo "✅ Backend deployed successfully!"
-            else
-              echo "❌ Deployment failed — starting rollback..."
-
-              echo "📜 Last logs:"
-              sudo docker logs $CONTAINER_NAME --tail 80 || true
-
-              sudo docker stop $CONTAINER_NAME || true
-              sudo docker rm $CONTAINER_NAME || true
-
-              if sudo docker image inspect $BACKUP_IMAGE >/dev/null 2>&1; then
-                echo "⏪ Rolling back to previous version"
-                sudo docker tag $BACKUP_IMAGE $LATEST_IMAGE
-                sudo docker run -d \
-                  --name $CONTAINER_NAME \
-                  --restart always \
-                  -p 127.0.0.1:5000:5000 \
-                  --env-file $ENV_FILE \
-                  $LATEST_IMAGE
-                echo "✅ Rollback successful"
-              else
-                echo "⚠️ No backup image available!"
-                exit 1
-              fi
-            fi
-
-            echo "🧹 Cleaning unused docker images"
-            sudo docker image prune -af
-
-            echo "============================="
-            echo "🎉 BACKEND DEPLOYMENT FINISHED"
-            echo "============================="
+        echo "🎉 BACKEND DEPLOYMENT FINISHED"
+```
