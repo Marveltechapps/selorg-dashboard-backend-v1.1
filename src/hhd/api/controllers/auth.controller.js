@@ -3,14 +3,9 @@ const HHDUser = require('../../models/User.model');
 const { createOTP, verifyOTP } = require('../../services/otp.service');
 const { logger } = require('../../utils/logger');
 const db = require('../../../config/db');
-const mongoose = require('mongoose');
-
-async function sendSMSAsync(mobile, otp) {
-  logger.info(`[Send OTP] SMS would be sent to ${mobile} with OTP: ${otp}`);
-}
+const { sendOtpSms, isOtpDevMode, getTestOtpIfApplicable, generateOTP } = require('../../../utils/smsGateway');
 
 async function sendOTP(req, res, next) {
-  const startTime = Date.now();
   const { mobile } = req.body;
   logger.info(`[Send OTP] Request received for mobile: ${mobile || 'N/A'}`);
 
@@ -22,11 +17,11 @@ async function sendOTP(req, res, next) {
         error: 'Mobile number is required',
       });
     }
-    const normalizedMobile = String(mobile).trim();
-    if (!/^[6-9]\d{9}$/.test(normalizedMobile)) {
+    const normalizedMobile = String(mobile).replace(/\D/g, '').slice(-10);
+    if (normalizedMobile.length !== 10 || /^0+$/.test(normalizedMobile)) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide a valid 10-digit mobile number starting with 6-9',
+        message: 'Please provide a valid 10-digit mobile number',
         error: 'Invalid mobile number format',
       });
     }
@@ -39,38 +34,38 @@ async function sendOTP(req, res, next) {
       });
     }
 
-    let otp;
-    try {
-      otp = await Promise.race([
-        createOTP(normalizedMobile),
-        new Promise((_, rej) => setTimeout(() => rej(new Error('OTP generation timeout')), 10000)),
-      ]);
-    } catch (otpError) {
-      let errorMessage = 'Failed to generate OTP. Please try again.';
-      if (otpError.message.includes('Database not available') || otpError.message.includes('timeout')) {
-        errorMessage = 'Service temporarily unavailable. Please try again in a moment.';
-      }
-      return res.status(500).json({ success: false, message: errorMessage, error: 'OTP generation failed' });
-    }
+    const testOtp = getTestOtpIfApplicable(normalizedMobile);
+    const otp = testOtp || generateOTP();
 
-    const isDevelopment = process.env.NODE_ENV === 'development';
-    if (isDevelopment) {
+    if (isOtpDevMode()) {
+      try {
+        await createOTP(normalizedMobile, otp); // pass otp so we use test/fixed OTP in dev
+      } catch (e) {
+        return res.status(500).json({ success: false, message: 'Failed to store OTP', error: e.message });
+      }
       return res.status(200).json({
         success: true,
         message: 'OTP sent successfully',
-        data: { mobile: normalizedMobile, otp },
+        ...(process.env.NODE_ENV === 'development' && { data: { mobile: normalizedMobile, otp } }),
+      });
+    }
+
+    const smsResult = await sendOtpSms(normalizedMobile, otp);
+    if (!smsResult.success) {
+      logger.warn(`[Send OTP] SMS failed for ${normalizedMobile}: ${smsResult.body || smsResult.error}`);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to send OTP via SMS. Please try again.',
+        error: 'SMS delivery failed',
       });
     }
 
     try {
-      sendSMSAsync(mobile, otp).catch((smsError) => logger.error(`[Send OTP] SMS failed: ${smsError.message}`));
-      return res.status(200).json({ success: true, message: 'OTP sent successfully' });
-    } catch (smsError) {
-      return res.status(200).json({
-        success: true,
-        message: 'OTP generated successfully. SMS delivery may be delayed.',
-      });
+      await createOTP(normalizedMobile, otp); // use OTP we already sent via SMS
+    } catch (otpError) {
+      return res.status(500).json({ success: false, message: 'OTP could not be stored', error: 'Service error' });
     }
+    return res.status(200).json({ success: true, message: 'OTP sent successfully' });
   } catch (error) {
     if (!res.headersSent) {
       res.status(500).json({
@@ -184,4 +179,8 @@ async function logout(req, res, next) {
   }
 }
 
-module.exports = { sendOTP, verifyOTP: verifyOTPHandler, getMe, logout };
+async function resendOTP(req, res) {
+  return sendOTP(req, res);
+}
+
+module.exports = { sendOTP, resendOTP, verifyOTP: verifyOTPHandler, getMe, logout };

@@ -60,6 +60,7 @@ const v2OrderRouter = tryRequire('./rider_v2_backend/src/modules/orders/order.ro
 const v2PayoutRouter = tryRequire('./rider_v2_backend/src/modules/payouts/payout.router.js');
 const v2IncidentRouter = tryRequire('./rider_v2_backend/src/modules/incidents/incident.router.js');
 const v2AuthRouter = tryRequire('./rider_v2_backend/src/modules/auth/auth.router.js');
+const v2SigninRouter = tryRequire('./rider_v2_backend/src/modules/auth/signin.router.js');
 
 // Validate critical environment variables on startup (skip in test mode)
 if (process.env.NODE_ENV !== 'test') {
@@ -200,6 +201,13 @@ if (v2IncidentRouter) {
 if (v2AuthRouter) {
   app.use('/api/v1/auth', v2AuthRouter);
   logger.info('Mounted rider_v2 auth router at /api/v1/auth');
+}
+
+// Rider signin OTP (send-otp, verify-otp, resend-otp) — used by Rider mobile app
+const signinRouter = v2SigninRouter?.signinRouter ?? v2SigninRouter;
+if (signinRouter) {
+  app.use('/api/signin', signinRouter);
+  logger.info('Mounted rider_v2 signin router at /api/signin');
 }
 
 // Mount delivery/rider router (v2 or legacy)

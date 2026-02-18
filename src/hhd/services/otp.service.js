@@ -22,11 +22,11 @@ function generateOTP(retryCount = 0) {
   return otp;
 }
 
-async function createOTP(mobile) {
+async function createOTP(mobile, otpOverride) {
   const normalizedMobile = String(mobile).trim();
   logger.info(`[OTP Service] Creating OTP for mobile: ${normalizedMobile}`);
   await ensureConnection();
-  const otp = generateOTP();
+  const otp = otpOverride != null ? String(otpOverride).trim() : generateOTP();
   const expiresAt = new Date();
   const expireMinutes = Math.max(5, Math.min(30, parseInt(process.env.OTP_EXPIRE_MINUTES || '10', 10)));
   expiresAt.setMinutes(expiresAt.getMinutes() + expireMinutes);

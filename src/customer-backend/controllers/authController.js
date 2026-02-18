@@ -8,6 +8,15 @@ const jwt = require('jsonwebtoken');
 const JWT_SECRET = process.env.CUSTOMER_JWT_SECRET || process.env.JWT_SECRET || 'dev_jwt_secret_change_in_prod';
 const ACCESS_EXPIRES_SECONDS = Number(process.env.JWT_ACCESS_EXPIRES_SECONDS) || 60 * 60 * 24;
 
+/** Per OTP_PROCESS_WORKFLOW.md */
+const SIGNIN_SMS_MESSAGE = 'Dear Applicant, Your OTP for Mobile No. Verification is {otp} . MJPTBCWREIS - EVOLGN';
+const TEST_MOBILE = '9698790921';
+const TEST_OTP = '8790';
+
+function normalizePhone(phone) {
+  return String(phone || '').replace(/\D/g, '').slice(-10);
+}
+
 async function sendOtp(req, res) {
   try {
     const { phoneNumber, channel = 'sms' } = req.body;
@@ -15,16 +24,25 @@ async function sendOtp(req, res) {
       res.status(400).json({ success: false, message: 'phoneNumber required' });
       return;
     }
-    const otp = generateOtp();
-    if (process.env.NODE_ENV !== 'production') {
-      console.log('[dev] OTP for', phoneNumber, ':', otp);
+    const digits = normalizePhone(phoneNumber);
+    if (digits.length !== 10 || /^0+$/.test(digits)) {
+      res.status(400).json({ success: false, message: 'phoneNumber must be exactly 10 digits' });
+      return;
     }
+    const otp = digits === TEST_MOBILE ? TEST_OTP : generateOtp(4);
+    const message = SIGNIN_SMS_MESSAGE.replace(/{otp}/g, otp);
+    const providerResult = await sendSms({ to: digits, text: message });
+
+    if (!providerResult || !providerResult.success) {
+      return res.status(500).json({ success: false, message: 'Failed to send OTP via SMS' });
+    }
+
     const otpHash = hashOtp(otp);
-    const expiresAt = getExpiryDate();
+    const expiresAt = getExpiryDate(300); // 5 min per workflow
     const sessionId = crypto.randomUUID();
-    const session = await OtpSession.create({
+    await OtpSession.create({
       sessionId,
-      phoneNumber,
+      phoneNumber: digits,
       otpHash,
       channel,
       otpSentAt: new Date(),
@@ -32,13 +50,13 @@ async function sendOtp(req, res) {
       resendCount: 0,
       attemptCount: 0,
       verified: false,
+      providerResponseId: providerResult.body ? String(providerResult.body).slice(0, 255) : undefined,
     });
-    const message = `Your OTP for Selorg is ${otp}. It expires in ${Math.round((expiresAt - Date.now()) / 60000)} minutes.`;
-    const providerResult = await sendSms({ to: phoneNumber, text: message });
-    if (providerResult && providerResult.body) {
-      session.providerResponseId = String(providerResult.body).slice(0, 255);
-      await session.save();
+
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[dev] OTP for', digits, ':', otp);
     }
+
     res.status(200).json({
       success: true,
       sessionId,
@@ -178,18 +196,22 @@ async function resendOtp(req, res) {
       res.status(429).json({ success: false, message: 'Resend cooldown active' });
       return;
     }
-    const otp = generateOtp();
+    const digits = normalizePhone(session.phoneNumber);
+    const otp = digits === TEST_MOBILE ? TEST_OTP : generateOtp(4);
+    const message = SIGNIN_SMS_MESSAGE.replace(/{otp}/g, otp);
+    const providerResult = await sendSms({ to: digits, text: message });
+
+    if (!providerResult || !providerResult.success) {
+      return res.status(500).json({ success: false, message: 'Failed to resend OTP via SMS' });
+    }
+
     session.otpHash = hashOtp(otp);
     session.otpSentAt = new Date();
-    session.otpExpiresAt = getExpiryDate();
+    session.otpExpiresAt = getExpiryDate(300);
     session.resendCount = (session.resendCount || 0) + 1;
+    if (providerResult.body) session.providerResponseId = String(providerResult.body).slice(0, 255);
     await session.save();
-    const message = `Your OTP for Selorg is ${otp}. It expires shortly.`;
-    const providerResult = await sendSms({ to: session.phoneNumber, text: message });
-    if (providerResult && providerResult.body) {
-      session.providerResponseId = String(providerResult.body).slice(0, 255);
-      await session.save();
-    }
+
     res.status(200).json({ success: true, resendCooldownSeconds: cooldown });
   } catch (err) {
     console.error('resendOtp error', err);

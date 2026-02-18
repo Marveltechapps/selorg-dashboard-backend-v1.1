@@ -1,0 +1,322 @@
+{
+  "info": {
+    "name": "Selorg – All Apps (Unified)",
+    "description": "Unified Postman collection for HHD, Picker, Rider, and Customer apps. Base URL: https://api.selorg.com. Per OTP_PROCESS_WORKFLOW.md. Test mobile 9698790921 → fixed OTP 8790.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "https://api.selorg.com" },
+    { "key": "mobile", "value": "9698790921" },
+    { "key": "phone", "value": "9698790921" },
+    { "key": "phoneNumber", "value": "9698790921" },
+    { "key": "otp", "value": "8790" },
+    { "key": "sessionId", "value": "" },
+    { "key": "token", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "HHD App",
+      "description": "Home Hub Delivery app. Base: /api/v1/hhd",
+      "item": [
+        {
+          "name": "1. Health Check",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/health", "host": ["{{baseUrl}}"], "path": ["health"] }
+          },
+          "description": "Backend server health check."
+        },
+        {
+          "name": "2. Auth - Send OTP",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"mobile\": \"{{mobile}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/v1/hhd/auth/send-otp", "host": ["{{baseUrl}}"], "path": ["api", "v1", "hhd", "auth", "send-otp"] }
+          },
+          "description": "Request OTP for mobile. Use valid Indian 10-digit mobile."
+        },
+        {
+          "name": "3. Auth - Resend OTP",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"mobile\": \"{{mobile}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/v1/hhd/auth/resend-otp", "host": ["{{baseUrl}}"], "path": ["api", "v1", "hhd", "auth", "resend-otp"] }
+          },
+          "description": "Resend OTP to same mobile."
+        },
+        {
+          "name": "4. Auth - Verify OTP",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"mobile\": \"{{mobile}}\",\n  \"otp\": \"{{otp}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/v1/hhd/auth/verify-otp", "host": ["{{baseUrl}}"], "path": ["api", "v1", "hhd", "auth", "verify-otp"] }
+          },
+          "description": "Verify OTP and receive JWT. Token saved to {{token}}.",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "var json = pm.response.json();",
+                "if (json.success && json.data && json.data.token) {",
+                "  pm.collectionVariables.set('token', json.data.token);",
+                "  console.log('Token saved');",
+                "}"
+              ],
+              "type": "text/javascript"
+            }
+          }]
+        },
+        {
+          "name": "5. Auth - Get Me",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}", "description": "Required" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/v1/hhd/auth/me", "host": ["{{baseUrl}}"], "path": ["api", "v1", "hhd", "auth", "me"] }
+          },
+          "description": "Get current user profile. Requires Bearer token."
+        },
+        {
+          "name": "6. Orders - Get Orders",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}", "description": "Required" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/v1/hhd/orders", "host": ["{{baseUrl}}"], "path": ["api", "v1", "hhd", "orders"] }
+          },
+          "description": "Get orders for authenticated HHD user."
+        }
+      ]
+    },
+    {
+      "name": "Picker App",
+      "description": "Picker app. Base: /api/v1/picker",
+      "item": [
+        {
+          "name": "1. Health Check",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/picker/health", "host": ["{{baseUrl}}"], "path": ["api", "v1", "picker", "health"] }
+          },
+          "description": "Picker health check (includes DB status)."
+        },
+        {
+          "name": "2. Auth - Send OTP",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"phone\": \"{{phone}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/v1/picker/auth/send-otp", "host": ["{{baseUrl}}"], "path": ["api", "v1", "picker", "auth", "send-otp"] }
+          },
+          "description": "Request OTP for phone."
+        },
+        {
+          "name": "3. Auth - Verify OTP",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"otp\": \"{{otp}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/v1/picker/auth/verify-otp", "host": ["{{baseUrl}}"], "path": ["api", "v1", "picker", "auth", "verify-otp"] }
+          },
+          "description": "Verify OTP and receive JWT. Token saved to {{token}}.",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "var json = pm.response.json();",
+                "if (json.success && json.token) {",
+                "  pm.collectionVariables.set('token', json.token);",
+                "  console.log('Token saved');",
+                "}"
+              ],
+              "type": "text/javascript"
+            }
+          }]
+        },
+        {
+          "name": "4. Auth - Resend OTP",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"phone\": \"{{phone}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/v1/picker/auth/resend-otp", "host": ["{{baseUrl}}"], "path": ["api", "v1", "picker", "auth", "resend-otp"] }
+          },
+          "description": "Resend OTP to same phone."
+        },
+        {
+          "name": "5. User - Get Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}", "description": "Required" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/v1/picker/users/profile", "host": ["{{baseUrl}}"], "path": ["api", "v1", "picker", "users", "profile"] }
+          },
+          "description": "Get current picker profile. Requires Bearer token."
+        },
+        {
+          "name": "6. Orders - Get Orders",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}", "description": "Required" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/v1/picker/orders", "host": ["{{baseUrl}}"], "path": ["api", "v1", "picker", "orders"] }
+          },
+          "description": "Get orders for authenticated picker."
+        }
+      ]
+    },
+    {
+      "name": "Rider App",
+      "description": "Rider app. Auth: /api/signin, other: /api/v1",
+      "item": [
+        {
+          "name": "1. Health Check",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/health", "host": ["{{baseUrl}}"], "path": ["health"] }
+          },
+          "description": "Backend server health check."
+        },
+        {
+          "name": "2. Auth - Send OTP (Signin)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"mobileNumber\": \"{{mobile}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/signin/send-otp", "host": ["{{baseUrl}}"], "path": ["api", "signin", "send-otp"] }
+          },
+          "description": "Rider signin: Request OTP. Uses mobileNumber."
+        },
+        {
+          "name": "3. Auth - Verify OTP (Signin)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"mobileNumber\": \"{{mobile}}\",\n  \"otp\": \"{{otp}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/signin/verify-otp", "host": ["{{baseUrl}}"], "path": ["api", "signin", "verify-otp"] }
+          },
+          "description": "Verify OTP and receive JWT. Token saved to {{token}}.",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "var json = pm.response.json();",
+                "if (json.token) {",
+                "  pm.collectionVariables.set('token', json.token);",
+                "  console.log('Token saved');",
+                "}"
+              ],
+              "type": "text/javascript"
+            }
+          }]
+        },
+        {
+          "name": "4. Auth - Resend OTP (Signin)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"mobileNumber\": \"{{mobile}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/signin/resend-otp", "host": ["{{baseUrl}}"], "path": ["api", "signin", "resend-otp"] }
+          },
+          "description": "Resend OTP. User must exist."
+        },
+        {
+          "name": "5. Auth - Get Me (v1)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}", "description": "Required" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/v1/auth/me", "host": ["{{baseUrl}}"], "path": ["api", "v1", "auth", "me"] }
+          },
+          "description": "Get current rider profile. Requires Bearer token."
+        },
+        {
+          "name": "6. Orders - List Orders (v1)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}", "description": "Required" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/v1/orders/admin/orders", "host": ["{{baseUrl}}"], "path": ["api", "v1", "orders", "admin", "orders"] }
+          },
+          "description": "List orders. Supports ?status= and ?warehouseCode=."
+        }
+      ]
+    },
+    {
+      "name": "Customer App",
+      "description": "Customer app. Base: /api/v1/customer/auth. Send OTP returns sessionId - use for Verify/Resend.",
+      "item": [
+        {
+          "name": "1. Auth - Send OTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"phoneNumber\": \"{{phoneNumber}}\",\n  \"channel\": \"sms\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/v1/customer/auth/send-otp", "host": ["{{baseUrl}}"], "path": ["api", "v1", "customer", "auth", "send-otp"] }
+          },
+          "description": "Request OTP. Returns sessionId - saved to {{sessionId}} for Verify/Resend.",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "var json = pm.response.json();",
+                "if (json.success && json.sessionId) {",
+                "  pm.collectionVariables.set('sessionId', json.sessionId);",
+                "  console.log('sessionId saved');",
+                "}"
+              ],
+              "type": "text/javascript"
+            }
+          }]
+        },
+        {
+          "name": "2. Auth - Verify OTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"sessionId\": \"{{sessionId}}\",\n  \"otp\": \"{{otp}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/v1/customer/auth/verify-otp", "host": ["{{baseUrl}}"], "path": ["api", "v1", "customer", "auth", "verify-otp"] }
+          },
+          "description": "Verify OTP with sessionId. Returns data.accessToken."
+        },
+        {
+          "name": "3. Auth - Resend OTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"sessionId\": \"{{sessionId}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/v1/customer/auth/resend-otp", "host": ["{{baseUrl}}"], "path": ["api", "v1", "customer", "auth", "resend-otp"] }
+          },
+          "description": "Resend OTP. Requires sessionId from Send OTP. 30s cooldown."
+        }
+      ]
+    }
+  ]
+}

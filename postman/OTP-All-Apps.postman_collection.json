@@ -1,0 +1,154 @@
+{
+  "info": {
+    "name": "Selorg OTP – All 4 Apps",
+    "description": "OTP endpoints for HHD, Picker, Rider, and Customer apps. Per OTP_PROCESS_WORKFLOW.md. Set baseUrl (e.g. http://localhost:5000 or https://api.selorg.com). Test mobile 9698790921 → fixed OTP 8790.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "https://api.selorg.com" },
+    { "key": "mobile", "value": "9698790921" },
+    { "key": "otp", "value": "8790" },
+    { "key": "sessionId", "value": "" },
+    { "key": "token", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "HHD",
+      "item": [
+        {
+          "name": "Send OTP",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"mobile\": \"{{mobile}}\"\n}" },
+            "url": "{{baseUrl}}/api/v1/hhd/auth/send-otp"
+          },
+          "description": "Body: { \"mobile\": \"10-digit\" }"
+        },
+        {
+          "name": "Verify OTP",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"mobile\": \"{{mobile}}\",\n  \"otp\": \"{{otp}}\"\n}" },
+            "url": "{{baseUrl}}/api/v1/hhd/auth/verify-otp"
+          },
+          "description": "Returns token in data.token"
+        },
+        {
+          "name": "Resend OTP",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"mobile\": \"{{mobile}}\"\n}" },
+            "url": "{{baseUrl}}/api/v1/hhd/auth/resend-otp"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Picker",
+      "item": [
+        {
+          "name": "Send OTP",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"phone\": \"{{mobile}}\"\n}" },
+            "url": "{{baseUrl}}/api/v1/picker/auth/send-otp"
+          },
+          "description": "Body: { \"phone\" or \"phoneNumber\": \"10-digit\" }"
+        },
+        {
+          "name": "Verify OTP",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"phone\": \"{{mobile}}\",\n  \"otp\": \"{{otp}}\"\n}" },
+            "url": "{{baseUrl}}/api/v1/picker/auth/verify-otp"
+          },
+          "description": "Returns token"
+        },
+        {
+          "name": "Resend OTP",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"phone\": \"{{mobile}}\"\n}" },
+            "url": "{{baseUrl}}/api/v1/picker/auth/resend-otp"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Rider (Signin)",
+      "item": [
+        {
+          "name": "Send OTP",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"mobileNumber\": \"{{mobile}}\"\n}" },
+            "url": "{{baseUrl}}/api/signin/send-otp"
+          },
+          "description": "Body: { \"mobileNumber\": \"10-digit\" }"
+        },
+        {
+          "name": "Verify OTP",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"mobileNumber\": \"{{mobile}}\",\n  \"otp\": \"{{otp}}\"\n}" },
+            "url": "{{baseUrl}}/api/signin/verify-otp"
+          },
+          "description": "Returns token at top level"
+        },
+        {
+          "name": "Resend OTP",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"mobileNumber\": \"{{mobile}}\"\n}" },
+            "url": "{{baseUrl}}/api/signin/resend-otp"
+          },
+          "description": "User must exist from Send OTP"
+        }
+      ]
+    },
+    {
+      "name": "Customer",
+      "item": [
+        {
+          "name": "Send OTP",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"phoneNumber\": \"{{mobile}}\",\n  \"channel\": \"sms\"\n}" },
+            "url": "{{baseUrl}}/api/v1/customer/auth/send-otp"
+          },
+          "description": "Returns sessionId. Save it for Verify/Resend."
+        },
+        {
+          "name": "Verify OTP",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"sessionId\": \"{{sessionId}}\",\n  \"otp\": \"{{otp}}\"\n}" },
+            "url": "{{baseUrl}}/api/v1/customer/auth/verify-otp"
+          },
+          "description": "Body: { \"sessionId\": \"from Send OTP\", \"otp\": \"4-digit\" }. Returns data.accessToken."
+        },
+        {
+          "name": "Resend OTP",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"sessionId\": \"{{sessionId}}\"\n}" },
+            "url": "{{baseUrl}}/api/v1/customer/auth/resend-otp"
+          },
+          "description": "Body: { \"sessionId\": \"from Send OTP\" }. 30s cooldown."
+        }
+      ]
+    }
+  ]
+}

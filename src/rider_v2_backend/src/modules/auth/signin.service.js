@@ -21,15 +21,17 @@ function generateOTP() {
   return Math.floor(1000 + Math.random() * 9000).toString();
 }
 
-// Real-time OTP: GET URL per OTP_PROCESS_WORKFLOW.md — smsvendor + to_mobileno + sms_text (Spear UC).
+// Real-time OTP: GET URL per OTP_PROCESS_WORKFLOW.md — smsvendor + paramMobile + paramMessage (from config.json).
 function buildSigninSmsUrl(mobileNumber, otp) {
   var base = (0, _appConfig.getSmsVendorUrl)();
   if (!base) return null;
   var mobile = String(mobileNumber).replace(/\D/g, "").slice(-10);
   if (mobile.length !== 10) return null;
   var message = SIGNIN_SMS_MESSAGE.replace("{otp}", otp);
-  var sep = base.includes("?") && !base.endsWith("&") && !base.endsWith("?") ? "&" : "";
-  var url = base + sep + "to_mobileno=" + encodeURIComponent(mobile) + "&sms_text=" + encodeURIComponent(message);
+  var mobileParam = (0, _appConfig.getSmsToParam)();
+  var msgParam = (0, _appConfig.getSmsMessageParam)();
+  var sep = base.includes("?") && !base.endsWith("&") && !base.endsWith("?") ? "&" : "?";
+  var url = base + sep + mobileParam + "=" + encodeURIComponent(mobile) + "&" + msgParam + "=" + encodeURIComponent(message);
   return url;
 }
 

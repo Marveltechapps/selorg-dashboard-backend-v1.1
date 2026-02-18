@@ -24,6 +24,10 @@ const {
 
 const JWT_SECRET = process.env.JWT_SECRET || 'picker-app-secret-change-in-production';
 
+/** Per OTP_PROCESS_WORKFLOW.md: test mobile returns fixed OTP, no SMS sent. */
+const TEST_MOBILE = '9698790921';
+const TEST_OTP = '8790';
+
 /** 4-digit numeric OTP (1000–9999). Used for both DEV and PROD; in DEV we always use this (never static). */
 const generateOtp = () => Math.floor(OTP_MIN + Math.random() * (OTP_MAX - OTP_MIN + 1)).toString();
 
@@ -164,10 +168,16 @@ const sendOtp = async (phone) => {
     return { success: false, message: resendCheck.message, errorCode: resendCheck.reason || OTP_ERROR_CODES.RATE_LIMIT };
   }
 
-  const code = generateOtp();
+  const code = trimmed === TEST_MOBILE ? TEST_OTP : generateOtp();
 
-  console.log('[auth] Sending SMS to', trimmed, 'via gateway (real SMS)...');
-  const smsResult = await sendOtpSms(trimmed, code, 5);
+  if (trimmed === TEST_MOBILE) {
+    console.log('[auth] TEST_MOBILE', TEST_MOBILE, '→ fixed OTP', TEST_OTP, '(no SMS sent)');
+  } else {
+    console.log('[auth] Sending SMS to', trimmed, 'via gateway (real SMS)...');
+  }
+  const smsResult = trimmed === TEST_MOBILE
+    ? { sent: true }
+    : await sendOtpSms(trimmed, code, 5);
 
   if (!smsResult.sent) {
     clearResendEntry(trimmed);
@@ -240,10 +250,16 @@ const resendOtp = async (phone) => {
     return { success: false, message: resendCheck.message, errorCode: resendCheck.reason || OTP_ERROR_CODES.RATE_LIMIT };
   }
 
-  const code = generateOtp();
+  const code = trimmed === TEST_MOBILE ? TEST_OTP : generateOtp();
 
-  console.log('[auth] Resending SMS to', trimmed, 'via gateway...');
-  const smsResult = await sendOtpSms(trimmed, code, 5);
+  if (trimmed === TEST_MOBILE) {
+    console.log('[auth] TEST_MOBILE resend → fixed OTP', TEST_OTP, '(no SMS sent)');
+  } else {
+    console.log('[auth] Resending SMS to', trimmed, 'via gateway...');
+  }
+  const smsResult = trimmed === TEST_MOBILE
+    ? { sent: true }
+    : await sendOtpSms(trimmed, code, 5);
 
   if (!smsResult.sent) {
     clearResendEntry(trimmed);
