@@ -2,13 +2,13 @@ name: Deploy Selorg Dashboard Backend (Rollback Safe)
 
 on:
 push:
-branches: ["Code_Updation_1.2.11"]
+branches:
+- Code_Updation_1.2.11
 
 jobs:
 deploy:
 runs-on: ubuntu-latest
 
-```
 steps:
   - name: Deploy Backend to EC2
     uses: appleboy/ssh-action@v1.0.3
@@ -27,11 +27,11 @@ steps:
         BACKEND_DIR="/home/ubuntu/selorg/selorg-dashboard-backend-v1.1"
         DOCKERFILE="/home/ubuntu/selorg/Dockerfiles/Dockerfile-backend"
         ENV_FILE="/home/ubuntu/selorg/envs/backend.env"
-
         IMAGE_NAME="selorg-backend"
         CONTAINER_NAME="selorg-backend"
         BRANCH="Code_Updation_1.2.11"
 
+        echo "➡️ Go to backend directory"
         cd $BACKEND_DIR
 
         echo "🧹 Sync repository"
@@ -51,13 +51,14 @@ steps:
         echo "🐳 Build new backend image"
         sudo docker build -t $NEW_IMAGE -f $DOCKERFILE .
 
+        echo "🏷 Tag as latest"
         sudo docker tag $NEW_IMAGE $LATEST_IMAGE
 
-        echo "🛑 Remove old container"
+        echo "🛑 Stop & remove old container"
         sudo docker stop $CONTAINER_NAME || true
         sudo docker rm $CONTAINER_NAME || true
 
-        echo "🚀 Start new container"
+        echo "🚀 Start new backend container"
         sudo docker run -d \
           --name $CONTAINER_NAME \
           --restart always \
@@ -66,8 +67,10 @@ steps:
           --env-file $ENV_FILE \
           $LATEST_IMAGE
 
+        echo "⏳ Waiting for backend boot..."
         sleep 8
 
+        echo "🔍 Health check"
         if curl -f http://127.0.0.1:5000/health >/dev/null 2>&1; then
           echo "✅ Deployment successful"
         else
@@ -77,6 +80,7 @@ steps:
           sudo docker rm -f $CONTAINER_NAME || true
 
           if sudo docker image inspect $BACKUP_IMAGE >/dev/null 2>&1; then
+            echo "⏪ Rolling back"
             sudo docker tag $BACKUP_IMAGE $LATEST_IMAGE
             sudo docker run -d \
               --name $CONTAINER_NAME \
@@ -85,13 +89,17 @@ steps:
               -p 127.0.0.1:5000:5000 \
               --env-file $ENV_FILE \
               $LATEST_IMAGE
+            echo "✅ Rollback successful"
           else
-            echo "No backup image"
+            echo "⚠️ No backup image available!"
             exit 1
           fi
         fi
 
+        echo "🧹 Cleaning unused images"
         sudo docker image prune -af
 
+        echo "============================="
         echo "🎉 BACKEND DEPLOYMENT FINISHED"
+        echo "============================="
 ```
