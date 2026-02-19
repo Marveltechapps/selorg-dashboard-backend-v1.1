@@ -21,9 +21,23 @@ function loadConfig() {
     const fs = require('fs');
     const raw = fs.readFileSync(CONFIG_PATH, 'utf8');
     _config = JSON.parse(raw);
+    const hasVendor = !!((_config.smsvendor || '').trim());
+    const devMode = _config.otpDevMode === 1 || _config.otpDevMode === true || process.env.OTP_DEV_MODE === '1' || process.env.OTP_DEV_MODE === 'true';
+    try {
+      const { logger } = require('../hhd/utils/logger');
+      logger.info(`[SMS] Config loaded: smsvendor=${hasVendor ? 'set' : 'NOT SET'}, otpDevMode=${devMode}`);
+    } catch (_) {
+      console.log(`[SMS] Config loaded: smsvendor=${hasVendor ? 'set' : 'NOT SET'}, otpDevMode=${devMode}`);
+    }
     return _config;
   } catch (e) {
     _config = {};
+    try {
+      const { logger } = require('../hhd/utils/logger');
+      logger.warn('[SMS] Config not loaded (using defaults): ' + (e && e.message));
+    } catch (_) {
+      console.warn('[SMS] Config not loaded:', e && e.message);
+    }
     return _config;
   }
 }
@@ -66,23 +80,26 @@ function buildSmsRequest(mobileNumber, otp) {
 
 /**
  * Parse gateway response. Success when: 2xx and body indicates success.
+ * Spear UC and similar gateways may return: "success", "1", "Sent", JSON with status/result/response.
  */
 function isSuccess(statusCode, body) {
   if (statusCode < 200 || statusCode >= 300) return false;
   const raw = (body || '').trim();
   const lower = raw.toLowerCase();
+  // Plain text success (e.g. "success", "1", "Sent")
+  if (/^(success|sent|ok|1|submitted|accepted|delivered)$/.test(lower)) return true;
   try {
     const j = JSON.parse(raw);
-    const s = (j?.status ?? j?.result ?? j?.Status ?? j?.data?.status ?? '').toString().toLowerCase();
+    const s = (j?.status ?? j?.result ?? j?.Result ?? j?.response ?? j?.Response ?? j?.Status ?? j?.data?.status ?? j?.message ?? '').toString().toLowerCase();
     if (s === 'fail' || s === 'error' || s === 'failure') return false;
-    if (s === 'success' || s === 'sent' || s === 'ok') return true;
+    if (s === 'success' || s === 'sent' || s === 'ok' || s === '1' || s === 'submitted' || s === 'accepted') return true;
   } catch (_) {}
-  if (/\b(success|sent|ok|delivered)\b/.test(lower) && !/\b(fail|error|invalid|denied)\b/.test(lower)) return true;
+  if (/\b(success|sent|ok|delivered|submitted|accepted)\b/.test(lower) && !/\b(fail|error|invalid|denied)\b/.test(lower)) return true;
   return false;
 }
 
-/** Per OTP_PROCESS_WORKFLOW.md: test mobile → no SMS sent, return success */
-const TEST_MOBILE = '9698790921';
+/** Test mobiles – no SMS sent, fixed OTP returned (for testing). 7418268091 uses real SMS (realtime). */
+const TEST_MOBILES = new Set(['9698790921']);
 
 /** When set in config, any number gets this OTP, no SMS (for testing) */
 function getTestOtpForAny() {
@@ -99,14 +116,28 @@ function getTestOtpForAny() {
  */
 function sendOtpSms(mobileNumber, otp) {
   const digits = String(mobileNumber).replace(/\D/g, '').slice(-10);
-  if (digits === TEST_MOBILE) {
+  if (TEST_MOBILES.has(digits)) {
     return Promise.resolve({ success: true });
   }
   if (getTestOtpForAny()) {
+    try {
+      const { logger } = require('../hhd/utils/logger');
+      logger.info(`[SMS] Skipping send (testOtpForAny): ${digits}`);
+    } catch (_) {
+      console.log(`[SMS] Skipping send (testOtpForAny): ${digits}`);
+    }
     return Promise.resolve({ success: true });
   }
   const req = buildSmsRequest(mobileNumber, otp);
-  if (!req) return Promise.resolve({ success: false });
+  if (!req) {
+    try {
+      const { logger } = require('../hhd/utils/logger');
+      logger.warn('[SMS] Not sent: smsvendor not configured or invalid (buildSmsRequest returned null)');
+    } catch (_) {
+      console.warn('[SMS] Not sent: smsvendor not configured or invalid');
+    }
+    return Promise.resolve({ success: false });
+  }
 
   return new Promise((resolve) => {
     const parsed = require('url').parse(req.url);
@@ -130,7 +161,9 @@ function sendOtpSms(mobileNumber, otp) {
           }
         } catch (_) {}
         if (!ok) {
-          logger.warn(`[SMS] Gateway returned status=${res.statusCode}, body=${(data || '').slice(0, 200)}`);
+          logger.warn(`[SMS] Gateway returned status=${res.statusCode}, body=${(data || '').slice(0, 300)}`);
+        } else {
+          logger.info(`[SMS] Gateway success for ${req.mobile}, status=${res.statusCode}`);
         }
         resolve({ success: !!ok, statusCode: res.statusCode, body: data });
       });
@@ -160,7 +193,7 @@ function getTestOtpIfApplicable(mobileNumber) {
   if (digits.length !== 10) return null;
   const forAny = getTestOtpForAny();
   if (forAny) return forAny;
-  return digits === TEST_MOBILE ? TEST_OTP : null;
+  return TEST_MOBILES.has(digits) ? TEST_OTP : null;
 }
 
 module.exports = {
