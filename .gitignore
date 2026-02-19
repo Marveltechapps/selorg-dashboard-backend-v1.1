@@ -49,6 +49,9 @@ coverage/
 uploads/*
 !uploads/.gitkeep
 
+# Scripts
+scripts/
+
 # Temporary files
 *.tmp
 *.temp
