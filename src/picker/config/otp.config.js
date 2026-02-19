@@ -2,7 +2,7 @@
  * OTP config – loads OTP/SMS credentials from config file and env (no hardcoding).
  * Supports: config smsvendor (Spear UC / custom), MSG91, Fast2SMS, Twilio.
  * India DLT: use approved template ID in MSG91/Fast2SMS; config smsvendor may include t_id for DLT.
- * Default: backend/config.json (override via OTP_CONFIG_PATH). Restart backend after config changes.
+ * Config: backend src/config.json (per OTP_PROCESS_WORKFLOW.md). Override via OTP_CONFIG_PATH.
  */
 const path = require('path');
 const fs = require('fs');
@@ -15,7 +15,11 @@ function getConfigPath() {
       ? process.env.OTP_CONFIG_PATH
       : path.resolve(process.cwd(), process.env.OTP_CONFIG_PATH);
   }
-  return path.resolve(__dirname, '../../config.json');
+  const relativePath = path.resolve(__dirname, '../../config.json');
+  if (fs.existsSync(relativePath)) return relativePath;
+  const cwdPath = path.resolve(process.cwd(), 'src/config.json');
+  if (fs.existsSync(cwdPath)) return cwdPath;
+  return relativePath;
 }
 
 /**
@@ -34,11 +38,17 @@ function loadOtpConfig() {
     const otpDevModeEnv = process.env.OTP_DEV_MODE === '1' || process.env.OTP_DEV_MODE === 'true';
     const otpDevMode = otpDevModeConfig || otpDevModeEnv || process.env.NODE_ENV === 'development';
 
+    let smsParamMobile = typeof data.smsParamMobile === 'string' ? data.smsParamMobile.trim() : 'to_mobileno';
+    let smsParamMessage = typeof data.smsParamMessage === 'string' ? data.smsParamMessage.trim() : 'sms_text';
+    // Spear UC / many gateways expect to_mobileno & sms_text; normalize common mistakes
+    if (smsParamMobile.toLowerCase() === 'mobile') smsParamMobile = 'to_mobileno';
+    if (smsParamMessage.toLowerCase() === 'message') smsParamMessage = 'sms_text';
+
     cached = {
       smsvendor: typeof data.smsvendor === 'string' ? data.smsvendor.trim() : '',
       smsProvider: smsProviderRaw.toLowerCase() === 'twilio' ? 'twilio' : (smsProviderRaw.toLowerCase() === 'config' || smsProviderRaw === '' ? 'config' : smsProviderRaw),
-      smsParamMobile: typeof data.smsParamMobile === 'string' ? data.smsParamMobile.trim() : 'mobile',
-      smsParamMessage: typeof data.smsParamMessage === 'string' ? data.smsParamMessage.trim() : 'message',
+      smsParamMobile,
+      smsParamMessage,
       smsCountryCode: typeof data.smsCountryCode === 'string' ? data.smsCountryCode.trim() : '91',
       smsPrependCountryCode: data.smsPrependCountryCode === true || data.smsPrependCountryCode === 1,
       smsMethod: (typeof data.smsMethod === 'string' ? data.smsMethod.toUpperCase() : '') === 'POST' ? 'POST' : 'GET',
@@ -58,7 +68,7 @@ function loadOtpConfig() {
   } catch (err) {
     console.warn('[OTP config] Failed to load', configPath, ':', err?.message);
     // When no config file: enable dev mode so send-otp works without SMS (OTP returned in response for testing).
-    cached = { smsvendor: '', smsProvider: 'config', smsParamMobile: 'mobile', smsParamMessage: 'message', smsCountryCode: '91', smsPrependCountryCode: false, smsMethod: 'GET', debugMode: true, otpDevMode: true, twilioAccountSid: '', twilioAuthToken: '', twilioPhoneNumber: '', msg91AuthKey: '', msg91Sender: '', msg91TemplateId: '', smsMessageTemplate: '' };
+    cached = { smsvendor: '', smsProvider: 'config', smsParamMobile: 'to_mobileno', smsParamMessage: 'sms_text', smsCountryCode: '91', smsPrependCountryCode: false, smsMethod: 'GET', debugMode: true, otpDevMode: true, twilioAccountSid: '', twilioAuthToken: '', twilioPhoneNumber: '', msg91AuthKey: '', msg91Sender: '', msg91TemplateId: '', smsMessageTemplate: '' };
   }
   return cached;
 }
@@ -95,14 +105,23 @@ function getTwilioConfig() {
  * smsPrependCountryCode: false = send 10 digits only; true = prepend countryCode (e.g. 91).
  *
  * Optional config keys (fix gateway "number required" by matching API contract):
- *   smsParamMobile   – e.g. "mobileno" (Spear UC), default "mobile"
- *   smsParamMessage  – e.g. "msg" (Spear UC), default "message"
+ *   smsParamMobile   – e.g. "to_mobileno" (Spear UC), default "to_mobileno"
+ *   smsParamMessage – e.g. "sms_text" (Spear UC), default "sms_text"
+ *
+ * Normalization: many configs incorrectly use "mobile"/"message"; Spear UC and similar
+ * gateways expect "to_mobileno"/"sms_text". We normalize so the gateway always receives
+ * the expected param names even when config has the wrong values.
  */
 function getSmsVendorParams() {
   const c = loadOtpConfig();
+  let paramMobile = (c.smsParamMobile && String(c.smsParamMobile).trim()) || 'to_mobileno';
+  let paramMessage = (c.smsParamMessage && String(c.smsParamMessage).trim()) || 'sms_text';
+  // Spear UC / many Indian gateways expect to_mobileno & sms_text; config often has mobile/message by mistake
+  if (paramMobile.toLowerCase() === 'mobile') paramMobile = 'to_mobileno';
+  if (paramMessage.toLowerCase() === 'message') paramMessage = 'sms_text';
   return {
-    paramMobile: c.smsParamMobile || 'mobile',
-    paramMessage: c.smsParamMessage || 'message',
+    paramMobile,
+    paramMessage,
     countryCode: c.smsCountryCode || '91',
     prependCountryCode: c.smsPrependCountryCode === true,
     method: c.smsMethod === 'POST' ? 'POST' : 'GET',
