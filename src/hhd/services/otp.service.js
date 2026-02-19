@@ -28,7 +28,7 @@ async function createOTP(mobile, otpOverride) {
   await ensureConnection();
   const otp = otpOverride != null ? String(otpOverride).trim() : generateOTP();
   const expiresAt = new Date();
-  const expireMinutes = Math.max(5, Math.min(30, parseInt(process.env.OTP_EXPIRE_MINUTES || '10', 10)));
+  const expireMinutes = Math.max(1, Math.min(30, parseInt(process.env.OTP_EXPIRE_MINUTES || '5', 10)));
   expiresAt.setMinutes(expiresAt.getMinutes() + expireMinutes);
 
   try {
@@ -46,12 +46,14 @@ async function createOTP(mobile, otpOverride) {
   ]);
   const saved = await HHDOTP.findById(created._id);
   if (!saved) throw new Error('OTP was not saved correctly');
+  logger.info(`[OTP Service] OTP created and saved: mobile=${normalizedMobile}, otp=${otpString}, expires=${expiresAt.toISOString()}`);
   return otpString;
 }
 
 async function verifyOTP(mobile, otp) {
   const normalizedMobile = String(mobile).trim();
   const normalizedOtp = String(otp).trim();
+  logger.info(`[OTP Service] Verifying OTP: mobile=${normalizedMobile}, otp=${normalizedOtp}`);
   await ensureConnection();
   const currentTime = new Date();
   let otpRecord = await Promise.race([
@@ -63,26 +65,45 @@ async function verifyOTP(mobile, otp) {
     }).sort({ createdAt: -1 }),
     new Promise((_, rej) => setTimeout(() => rej(new Error('Verify OTP timeout')), 5000)),
   ]);
+  
+  logger.info(`[OTP Service] Initial query result: ${otpRecord ? 'found' : 'not found'}`);
 
   if (!otpRecord) {
+    logger.info(`[OTP Service] No direct match, checking all OTPs for mobile=${normalizedMobile}`);
     const allOtps = await HHDOTP.find({ mobile: normalizedMobile }).sort({ createdAt: -1 }).limit(5);
+    logger.info(`[OTP Service] Found ${allOtps.length} OTP records for this mobile`);
+    
+    allOtps.forEach((r, idx) => {
+      logger.info(`[OTP Service] Record ${idx + 1}: otp=${r.otp}, isUsed=${r.isUsed}, expiresAt=${r.expiresAt.toISOString()}, expired=${r.expiresAt <= currentTime}`);
+    });
+    
     const validOtps = allOtps.filter((r) => !r.isUsed && r.expiresAt > currentTime);
+    logger.info(`[OTP Service] Valid (unused + not expired) OTPs: ${validOtps.length}`);
+    
     for (const record of validOtps) {
       const recordOtp = String(record.otp).trim();
+      logger.info(`[OTP Service] Comparing: stored="${recordOtp}" vs entered="${normalizedOtp}"`);
       if (recordOtp === normalizedOtp) {
+        logger.info(`[OTP Service] String match found!`);
         otpRecord = record;
         break;
       }
       const rNum = parseInt(recordOtp, 10);
       const pNum = parseInt(normalizedOtp, 10);
       if (!isNaN(rNum) && !isNaN(pNum) && rNum === pNum) {
+        logger.info(`[OTP Service] Numeric match found!`);
         otpRecord = record;
         break;
       }
     }
   }
 
-  if (!otpRecord) return false;
+  if (!otpRecord) {
+    logger.warn(`[OTP Service] Verification failed: No valid OTP found for mobile=${normalizedMobile}, entered OTP=${normalizedOtp}`);
+    return false;
+  }
+  
+  logger.info(`[OTP Service] OTP match found, marking as used`);
   await Promise.race([
     HHDOTP.updateOne({ _id: otpRecord._id, isUsed: false }, { $set: { isUsed: true } }),
     new Promise((_, rej) => setTimeout(() => rej(new Error('Mark OTP timeout')), 5000)),

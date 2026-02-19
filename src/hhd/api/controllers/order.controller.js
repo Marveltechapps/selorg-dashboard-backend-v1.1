@@ -2,7 +2,7 @@ const { ErrorResponse } = require('../../utils/ErrorResponse');
 const HHDOrder = require('../../models/Order.model');
 const HHDCompletedOrder = require('../../models/CompletedOrder.model');
 const HHDItem = require('../../models/Item.model');
-const { ORDER_STATUS } = require('../../utils/constants');
+const { ORDER_STATUS, ORDER_PRIORITY } = require('../../utils/constants');
 const { emitOrderUpdate, emitNewOrder } = require('../../services/socket.service');
 const { getIO } = require('../../config/socket');
 const mongoose = require('mongoose');
@@ -48,7 +48,7 @@ async function getOrder(req, res, next) {
 async function createOrder(req, res, next) {
   try {
     const userId = req.user?.id;
-    const { orderId, zone, itemCount, targetTime, items } = req.body;
+    const { orderId, zone, itemCount, targetTime, priority, items } = req.body;
     const existingOrder = await HHDOrder.findOne({ orderId });
     if (existingOrder) throw new ErrorResponse(`Order ${orderId} already exists`, 400);
     const order = await HHDOrder.create({
@@ -57,6 +57,7 @@ async function createOrder(req, res, next) {
       zone,
       itemCount,
       targetTime,
+      priority: priority && Object.values(ORDER_PRIORITY).includes(priority) ? priority : ORDER_PRIORITY.HIGH,
       status: ORDER_STATUS.RECEIVED,
       startedAt: new Date(),
     });
@@ -73,7 +74,7 @@ async function createOrder(req, res, next) {
 async function updateOrderStatus(req, res, next) {
   try {
     const { orderId } = req.params;
-    const { status, bagId, rackLocation, riderName, riderId, pickTime } = req.body;
+    const { status, bagId, rackLocation, riderName, riderId, pickTime, priority } = req.body;
     const userId = req.user?.id;
     const order = await HHDOrder.findOne({ orderId, userId });
     if (!order) throw new ErrorResponse(`Order not found with id of ${orderId}`, 404);
@@ -83,6 +84,7 @@ async function updateOrderStatus(req, res, next) {
     if (riderName) order.riderName = riderName;
     if (riderId) order.riderId = riderId;
     if (pickTime) order.pickTime = pickTime;
+    if (priority && Object.values(ORDER_PRIORITY).includes(priority)) order.priority = priority;
     if (status === ORDER_STATUS.PICKING && !order.startedAt) order.startedAt = new Date();
     if (status === ORDER_STATUS.COMPLETED) order.completedAt = new Date();
     await order.save();

@@ -2,8 +2,8 @@
  * Shared SMS Gateway for OTP delivery.
  * Reads credentials from src/config.json per OTP_PROCESS_WORKFLOW.md.
  *
- * Config keys: smsvendor, smsParamMobile, smsParamMessage, smsMethod, otpDevMode
- * Message template: "Dear Applicant, Your OTP for Mobile No. Verification is {otp} . MJPTBCWREIS - EVOLGN"
+ * Config keys: smsvendor, smsParamMobile, smsParamMessage, smsMethod, otpDevMode,
+ *   smsUseCountryCode (false = 10-digit for Spearuc India), smsMessageTemplate (DLT must match exactly)
  */
 const path = require('path');
 const https = require('https');
@@ -11,7 +11,7 @@ const http = require('http');
 
 const CONFIG_PATH = path.resolve(__dirname, '..', 'config.json');
 const SMS_TIMEOUT_MS = 15000;
-const SIGNIN_SMS_MESSAGE = 'Dear Applicant, Your OTP for Mobile No. Verification is {otp} . MJPTBCWREIS - EVOLGN';
+const DEFAULT_SMS_MESSAGE = 'Dear Applicant, Your OTP for Mobile No. Verification is {otp} . MJPTBCWREIS - EVOLGN';
 
 let _config = null;
 
@@ -34,8 +34,12 @@ function generateOTP() {
 }
 
 /**
- * Build SMS URL for GET or return params for POST.
- * Uses smsParamMobile and smsParamMessage from config, fallback to to_mobileno/sms_text.
+ * Build SMS URL for GET. Reads from config.json:
+ * - smsvendor (required): base URL with credentials, must end with &
+ * - smsParamMobile: default to_mobileno (Spearuc)
+ * - smsParamMessage: default sms_text (Spearuc)
+ * - smsUseCountryCode: true = 91+10 digits, false/omit = 10 digits (Spearuc India)
+ * - smsMessageTemplate: DLT template, use {otp} or {#var#} for OTP placeholder
  */
 function buildSmsRequest(mobileNumber, otp) {
   const config = loadConfig();
@@ -47,13 +51,17 @@ function buildSmsRequest(mobileNumber, otp) {
 
   const paramMobile = config.smsParamMobile || 'to_mobileno';
   const paramMessage = config.smsParamMessage || 'sms_text';
-  const message = SIGNIN_SMS_MESSAGE.replace(/{otp}/g, otp);
-  const method = (config.smsMethod || 'GET').toUpperCase();
+  const template = config.smsMessageTemplate || DEFAULT_SMS_MESSAGE;
+  const message = template.replace(/{otp}/g, otp).replace(/\{#var#\}/g, otp);
+
+  // Spearuc India: use 10-digit unless config explicitly sets smsUseCountryCode: true
+  const useCountryCode = config.smsUseCountryCode === true;
+  const mobileParam = useCountryCode ? '91' + mobile : mobile;
 
   const sep = base.includes('?') && !base.endsWith('&') && !base.endsWith('?') ? '&' : '';
-  const url = `${base}${sep}${paramMobile}=${encodeURIComponent(mobile)}&${paramMessage}=${encodeURIComponent(message)}`;
+  const url = `${base}${sep}${paramMobile}=${encodeURIComponent(mobileParam)}&${paramMessage}=${encodeURIComponent(message)}`;
 
-  return { url, mobile, message, method, paramMobile, paramMessage };
+  return { url, mobile, mobileParam, message, paramMobile, paramMessage };
 }
 
 /**
@@ -76,6 +84,13 @@ function isSuccess(statusCode, body) {
 /** Per OTP_PROCESS_WORKFLOW.md: test mobile → no SMS sent, return success */
 const TEST_MOBILE = '9698790921';
 
+/** When set in config, any number gets this OTP, no SMS (for testing) */
+function getTestOtpForAny() {
+  const config = loadConfig();
+  const val = config.testOtpForAny;
+  return val && /^\d{4}$/.test(String(val).trim()) ? String(val).trim() : null;
+}
+
 /**
  * Send OTP via SMS gateway.
  * @param {string} mobileNumber - 10-digit mobile
@@ -87,6 +102,9 @@ function sendOtpSms(mobileNumber, otp) {
   if (digits === TEST_MOBILE) {
     return Promise.resolve({ success: true });
   }
+  if (getTestOtpForAny()) {
+    return Promise.resolve({ success: true });
+  }
   const req = buildSmsRequest(mobileNumber, otp);
   if (!req) return Promise.resolve({ success: false });
 
@@ -95,15 +113,32 @@ function sendOtpSms(mobileNumber, otp) {
     const lib = parsed.protocol === 'https:' ? https : http;
     const opts = { timeout: SMS_TIMEOUT_MS, headers: { 'User-Agent': 'Selorg-OTP/1.0', Accept: '*/*' } };
 
+    // Log SMS attempt (redact full URL in prod)
+    const { logger } = require('../hhd/utils/logger');
+    logger.info(`[SMS] Sending to ${req.mobile} (param: ${req.mobileParam}), URL: ${parsed.protocol}//${parsed.host}${parsed.pathname}?***`);
+
     const clientReq = lib.get(req.url, opts, (res) => {
       let data = '';
       res.on('data', (c) => (data += c));
       res.on('end', () => {
         const ok = isSuccess(res.statusCode, data);
+        try {
+          const j = JSON.parse(data || '{}');
+          const campaignId = j?.campaign_id || j?.CampaignId;
+          if (ok && campaignId) {
+            logger.info(`[SMS] Gateway accepted: campaign_id=${campaignId} to ${req.mobile}`);
+          }
+        } catch (_) {}
+        if (!ok) {
+          logger.warn(`[SMS] Gateway returned status=${res.statusCode}, body=${(data || '').slice(0, 200)}`);
+        }
         resolve({ success: !!ok, statusCode: res.statusCode, body: data });
       });
     });
-    clientReq.on('error', (err) => resolve({ success: false, error: err?.message }));
+    clientReq.on('error', (err) => {
+      logger.warn(`[SMS] Request error: ${err?.message}`);
+      resolve({ success: false, error: err?.message });
+    });
     clientReq.setTimeout(SMS_TIMEOUT_MS, () => {
       clientReq.destroy();
       resolve({ success: false, error: 'Request timeout' });
@@ -122,6 +157,9 @@ const TEST_OTP = '8790';
 
 function getTestOtpIfApplicable(mobileNumber) {
   const digits = String(mobileNumber).replace(/\D/g, '').slice(-10);
+  if (digits.length !== 10) return null;
+  const forAny = getTestOtpForAny();
+  if (forAny) return forAny;
   return digits === TEST_MOBILE ? TEST_OTP : null;
 }
 
@@ -130,5 +168,5 @@ module.exports = {
   sendOtpSms,
   isOtpDevMode,
   getTestOtpIfApplicable,
-  SIGNIN_SMS_MESSAGE,
+  SIGNIN_SMS_MESSAGE: DEFAULT_SMS_MESSAGE,
 };

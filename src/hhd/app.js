@@ -23,6 +23,7 @@ const userRoutes = require('./api/routes/user.routes');
 const scannedItemRoutes = require('./api/routes/scannedItem.routes');
 const pickRoutes = require('./api/routes/pick.routes');
 const adminRoutes = require('./api/routes/admin.routes');
+const dashboardRoutes = require('./api/routes/dashboard.routes');
 
 const app = express();
 
@@ -70,6 +71,7 @@ app.use('/users', userRoutes);
 app.use('/scanned-items', scannedItemRoutes);
 app.use('/pick', pickRoutes);
 app.use('/admin', adminRoutes);
+app.use('/dashboard', dashboardRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

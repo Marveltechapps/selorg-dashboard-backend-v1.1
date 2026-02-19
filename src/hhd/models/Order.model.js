@@ -1,11 +1,17 @@
 const mongoose = require('mongoose');
-const { ORDER_STATUS, ZONE } = require('../utils/constants');
+const { ORDER_STATUS, ORDER_PRIORITY, ZONE } = require('../utils/constants');
 
 const OrderSchema = new mongoose.Schema(
   {
     orderId: { type: String, required: [true, 'Please add an order ID'], unique: true, index: true },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'HHDUser', required: true, index: true },
     zone: { type: String, enum: Object.values(ZONE), required: true },
+    priority: {
+      type: String,
+      enum: Object.values(ORDER_PRIORITY),
+      default: ORDER_PRIORITY.HIGH,
+      index: true,
+    },
     status: {
       type: String,
       enum: Object.values(ORDER_STATUS),

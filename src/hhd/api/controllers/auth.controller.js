@@ -6,18 +6,19 @@ const db = require('../../../config/db');
 const { sendOtpSms, isOtpDevMode, getTestOtpIfApplicable, generateOTP } = require('../../../utils/smsGateway');
 
 async function sendOTP(req, res, next) {
-  const { mobile } = req.body;
-  logger.info(`[Send OTP] Request received for mobile: ${mobile || 'N/A'}`);
+  const { mobile, mobileNumber } = req.body;
+  const mobileParam = mobile || mobileNumber; // Workflow doc uses mobileNumber
+  logger.info(`[Send OTP] Request received for mobile: ${mobileParam || 'N/A'}`);
 
   try {
-    if (!mobile) {
+    if (!mobileParam) {
       return res.status(400).json({
         success: false,
         message: 'Please provide a mobile number',
         error: 'Mobile number is required',
       });
     }
-    const normalizedMobile = String(mobile).replace(/\D/g, '').slice(-10);
+    const normalizedMobile = String(mobileParam).replace(/\D/g, '').slice(-10);
     if (normalizedMobile.length !== 10 || /^0+$/.test(normalizedMobile)) {
       return res.status(400).json({
         success: false,
@@ -46,7 +47,7 @@ async function sendOTP(req, res, next) {
       return res.status(200).json({
         success: true,
         message: 'OTP sent successfully',
-        ...(process.env.NODE_ENV === 'development' && { data: { mobile: normalizedMobile, otp } }),
+        data: { mobile: normalizedMobile, otp }, // always return OTP in dev mode for testing
       });
     }
 
@@ -65,7 +66,13 @@ async function sendOTP(req, res, next) {
     } catch (otpError) {
       return res.status(500).json({ success: false, message: 'OTP could not be stored', error: 'Service error' });
     }
-    return res.status(200).json({ success: true, message: 'OTP sent successfully' });
+    // Include OTP in response when using test number (no real SMS sent) - for app auto-fill
+    const includeOtp = !!testOtp;
+    return res.status(200).json({
+      success: true,
+      message: 'OTP sent successfully',
+      ...(includeOtp && { data: { mobile: normalizedMobile, otp } }),
+    });
   } catch (error) {
     if (!res.headersSent) {
       res.status(500).json({
@@ -79,18 +86,20 @@ async function sendOTP(req, res, next) {
 
 async function verifyOTPHandler(req, res, next) {
   const startTime = Date.now();
-  const { mobile, otp } = req.body;
-  logger.info(`[Verify OTP] Request received for mobile: ${mobile || 'N/A'}`);
+  const { mobile, mobileNumber, otp, enteredOTP } = req.body;
+  const mobileParam = mobile || mobileNumber;
+  const otpParam = otp || enteredOTP;
+  logger.info(`[Verify OTP] Request received for mobile: ${mobileParam || 'N/A'}`);
 
   try {
-    if (!mobile) {
+    if (!mobileParam) {
       return res.status(400).json({ success: false, message: 'Please provide mobile number', error: 'Mobile number is required' });
     }
-    if (!otp) {
+    if (!otpParam) {
       return res.status(400).json({ success: false, message: 'Please provide OTP', error: 'OTP is required' });
     }
-    const normalizedMobile = String(mobile).trim();
-    const normalizedOtp = String(otp).trim();
+    const normalizedMobile = String(mobileParam).trim();
+    const normalizedOtp = String(otpParam).trim();
     if (!/^\d{4}$/.test(normalizedOtp)) {
       return res.status(400).json({
         success: false,

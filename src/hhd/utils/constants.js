@@ -38,6 +38,14 @@ const TASK_PRIORITY = {
   URGENT: 'urgent',
 };
 
+/** Order priority for HHD orders (delivery/pick urgency). */
+const ORDER_PRIORITY = {
+  LOW: 'low',
+  MEDIUM: 'medium',
+  HIGH: 'high',
+  URGENT: 'urgent',
+};
+
 const USER_ROLE = {
   PICKER: 'picker',
   SUPERVISOR: 'supervisor',
@@ -85,6 +93,7 @@ module.exports = {
   BAG_STATUS,
   TASK_STATUS,
   TASK_PRIORITY,
+  ORDER_PRIORITY,
   USER_ROLE,
   ZONE,
   PICK_ISSUE_TYPE,
