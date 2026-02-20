@@ -55,8 +55,9 @@ const sendOtp = async (phone) => {
     return { success: true, message: 'OTP sent successfully', otp };
   }
 
-  logPickerOtp('info', `[Picker OTP] sendOtp: sending SMS to ${trimmed} via gateway`);
+  logPickerOtp('info', `[Picker OTP] sendOtp: sending SMS to ${trimmed} via gateway, OTP: ${otp}`);
   const smsResult = await sendOtpSms(trimmed, otp);
+  logPickerOtp('info', `[Picker OTP] sendOtp: SMS gateway result - success: ${smsResult.success}, statusCode: ${smsResult.statusCode || 'N/A'}, body: ${(smsResult.body || '').slice(0, 200)}`);
   if (!smsResult.success) {
     logPickerOtp('warn', `[Picker OTP] sendOtp: SMS gateway failed for ${trimmed} – statusCode=${smsResult.statusCode || ''} error=${smsResult.error || ''}`);
     return {
@@ -65,7 +66,7 @@ const sendOtp = async (phone) => {
       errorCode: OTP_ERROR_CODES.SMS_GATEWAY_ERROR,
     };
   }
-  logPickerOtp('info', `[Picker OTP] sendOtp: SMS accepted by gateway for ${trimmed}`);
+  logPickerOtp('info', `[Picker OTP] sendOtp: SMS accepted by gateway for ${trimmed}, OTP: ${otp}`);
 
   try {
     await createOTP(trimmed, otp);
@@ -76,6 +77,7 @@ const sendOtp = async (phone) => {
   return {
     success: true,
     message: 'OTP sent successfully',
+    debugOtp: otp, // For testing - remove in production
     ...(testOtp && { otp: testOtp }),
   };
 };

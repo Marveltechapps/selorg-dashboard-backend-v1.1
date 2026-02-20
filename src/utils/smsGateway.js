@@ -147,12 +147,14 @@ function sendOtpSms(mobileNumber, otp) {
     // Log SMS attempt (redact full URL in prod)
     const { logger } = require('../hhd/utils/logger');
     logger.info(`[SMS] Sending to ${req.mobile} (param: ${req.mobileParam}), URL: ${parsed.protocol}//${parsed.host}${parsed.pathname}?***`);
+    logger.info(`[SMS] Full request URL (debugging): ${req.url}`);
 
     const clientReq = lib.get(req.url, opts, (res) => {
       let data = '';
       res.on('data', (c) => (data += c));
       res.on('end', () => {
         const ok = isSuccess(res.statusCode, data);
+        logger.info(`[SMS] Gateway response: status=${res.statusCode}, body=${(data || '').slice(0, 500)}`);
         try {
           const j = JSON.parse(data || '{}');
           const campaignId = j?.campaign_id || j?.CampaignId;
