@@ -22,6 +22,8 @@ const userSchema = new mongoose.Schema(
       video3: { type: Number, default: 0 },
       video4: { type: Number, default: 0 },
     },
+    trainingCompleted: { type: Boolean, default: false },
+    trainingCompletedAt: { type: Date },
     upiId: { type: String },
     upiName: { type: String },
     /** When using shared DB: HHD User _id (users collection) for orders-to-order-complete flow. No ref – other app’s collection. */
