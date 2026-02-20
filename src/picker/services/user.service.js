@@ -5,15 +5,34 @@
 const mongoose = require('mongoose');
 const User = require('../models/user.model');
 const HHDUser = require('../../hhd/models/User.model');
+const { uploadPickerProfileImage } = require('../../utils/s3Upload');
 
 const updateProfile = async (userId, body) => {
   const set = {};
   if (body.name != null) set.name = body.name;
   if (body.age != null) set.age = body.age;
   if (body.gender != null) set.gender = body.gender;
-  if (body.photoUri != null) set.photoUri = body.photoUri;
   if (body.email != null) set.email = body.email;
   if (body.phone != null) set.phone = body.phone;
+  
+  // Handle profile image upload to S3
+  if (body.photoUri != null) {
+    // Check if it's a base64 image (starts with data: or is pure base64)
+    if (body.photoUri.startsWith('data:') || body.photoUri.startsWith('/9j/') || body.photoUri.startsWith('iVBOR')) {
+      try {
+        // Upload to S3 and get the URL
+        const s3Url = await uploadPickerProfileImage(userId, body.photoUri);
+        set.photoUri = s3Url;
+      } catch (error) {
+        console.error('[User Service] Failed to upload profile image to S3:', error);
+        throw new Error('Failed to upload profile image');
+      }
+    } else {
+      // Already an S3 URL or external URL, just save it
+      set.photoUri = body.photoUri;
+    }
+  }
+  
   const user = await User.findByIdAndUpdate(userId, { $set: set }, { new: true }).lean();
   return user || null;
 };
