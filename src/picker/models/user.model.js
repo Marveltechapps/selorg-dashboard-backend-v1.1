@@ -24,6 +24,12 @@ const userSchema = new mongoose.Schema(
     },
     trainingCompleted: { type: Boolean, default: false },
     trainingCompletedAt: { type: Date },
+    currentLocationId: { type: String }, // Current work location ID
+    lastKnownLocation: {
+      latitude: { type: Number },
+      longitude: { type: Number },
+      timestamp: { type: Date }
+    },
     upiId: { type: String },
     upiName: { type: String },
     /** When using shared DB: HHD User _id (users collection) for orders-to-order-complete flow. No ref – other app’s collection. */

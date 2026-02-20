@@ -8,6 +8,7 @@ const userRoutes = require('./routes/user.routes');
 const documentsRoutes = require('./routes/documents.routes');
 const verifyRoutes = require('./routes/verify.routes');
 const trainingRoutes = require('./routes/training.routes');
+const locationRoutes = require('./routes/location.routes');
 const shiftsRoutes = require('./routes/shifts.routes');
 const attendanceRoutes = require('./routes/attendance.routes');
 const walletRoutes = require('./routes/wallet.routes');
@@ -55,6 +56,7 @@ app.use('/users', userRoutes);
 app.use('/documents', documentsRoutes);
 app.use('/verify', verifyRoutes);
 app.use('/training', trainingRoutes);
+app.use('/', locationRoutes); // Mounts at /locations
 app.use('/shifts', shiftsRoutes);
 app.use('/attendance', attendanceRoutes);
 app.use('/wallet', walletRoutes);
