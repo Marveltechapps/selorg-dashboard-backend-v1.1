@@ -60,6 +60,30 @@ const videos = [
     order: 4,
     minimumWatchPercentage: 80,
     isActive: true
+  },
+  {
+    videoId: 'video5',
+    title: 'Customer Service Excellence',
+    description: 'Best practices for handling customer orders and maintaining quality standards',
+    duration: 420, // 7 minutes in seconds
+    durationDisplay: '7 min',
+    videoUrl: 'https://selorg-training-videos.s3.ap-south-1.amazonaws.com/video5.mp4',
+    thumbnailUrl: 'https://selorg-training-videos.s3.ap-south-1.amazonaws.com/video5-thumb.jpg',
+    order: 5,
+    minimumWatchPercentage: 80,
+    isActive: true
+  },
+  {
+    videoId: 'video6',
+    title: 'Quality Control & Hygiene',
+    description: 'Understanding quality checks, hygiene standards, and product handling',
+    duration: 540, // 9 minutes in seconds
+    durationDisplay: '9 min',
+    videoUrl: 'https://selorg-training-videos.s3.ap-south-1.amazonaws.com/video6.mp4',
+    thumbnailUrl: 'https://selorg-training-videos.s3.ap-south-1.amazonaws.com/video6-thumb.jpg',
+    order: 6,
+    minimumWatchPercentage: 80,
+    isActive: true
   }
 ];
 
