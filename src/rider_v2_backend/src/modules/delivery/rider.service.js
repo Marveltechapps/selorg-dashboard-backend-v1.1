@@ -7,6 +7,8 @@ Object.defineProperty(exports, "__esModule", {
 exports.uploadDocument = exports.updateRiderPreferredLocation = exports.updateRiderProfile = exports.updateRiderLocation = exports.startShift = exports.setAvailability = exports.getRiderStats = exports.getRiderByPhone = exports.getRiderById = exports.endShift = exports.createRider = void 0;
 var _nodeCrypto = require("node:crypto");
 var _Rider = require("../../models/Rider.js");
+var _Order = require("../../models/Order.js");
+var _riderCacheHelper = require("../../utils/riderCacheHelper.js");
 function ownKeys(e, r) { var t = Object.keys(e); if (Object.getOwnPropertySymbols) { var o = Object.getOwnPropertySymbols(e); r && (o = o.filter(function (r) { return Object.getOwnPropertyDescriptor(e, r).enumerable; })), t.push.apply(t, o); } return t; }
 function _objectSpread(e) { for (var r = 1; r < arguments.length; r++) { var t = null != arguments[r] ? arguments[r] : {}; r % 2 ? ownKeys(Object(t), !0).forEach(function (r) { _defineProperty(e, r, t[r]); }) : Object.getOwnPropertyDescriptors ? Object.defineProperties(e, Object.getOwnPropertyDescriptors(t)) : ownKeys(Object(t)).forEach(function (r) { Object.defineProperty(e, r, Object.getOwnPropertyDescriptor(t, r)); }); } return e; }
 function _defineProperty(e, r, t) { return (r = _toPropertyKey(r)) in e ? Object.defineProperty(e, r, { value: t, enumerable: !0, configurable: !0, writable: !0 }) : e[r] = t, e; }
@@ -82,9 +84,21 @@ var getRiderById = exports.getRiderById = /*#__PURE__*/function () {
     return _regenerator().w(function (_context2) {
       while (1) switch (_context2.n) {
         case 0:
-          return _context2.a(2, _Rider.Rider.findOne({
-            riderId: riderId
-          }));
+          return _context2.a(2, _riderCacheHelper.getCachedOrCompute("rider:profile:".concat(riderId), 30, /*#__PURE__*/function () {
+            var _ref2inner = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee2inner() {
+              var doc;
+              return _regenerator().w(function (_context2inner) {
+                switch (_context2inner.n) {
+                  case 0:
+                    return _context2inner.a(2, _Rider.Rider.findOne({ riderId: riderId }).lean());
+                  case 1:
+                    doc = _context2inner.v;
+                    return _context2inner.a(2, doc || null);
+                }
+              }, _callee2inner);
+            }));
+            return function () { return _ref2inner.apply(this, arguments); };
+          }()));
       }
     }, _callee2);
   }));
@@ -181,16 +195,16 @@ var endShift = exports.endShift = /*#__PURE__*/function () {
 }();
 var setAvailability = exports.setAvailability = /*#__PURE__*/function () {
   var _ref7 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee7(riderId, availability) {
+    var rider;
     return _regenerator().w(function (_context7) {
       while (1) switch (_context7.n) {
         case 0:
-          return _context7.a(2, _Rider.Rider.findOneAndUpdate({
-            riderId: riderId
-          }, {
-            availability: availability
-          }, {
-            "new": true
-          }));
+          _context7.n = 1;
+          return _Rider.Rider.findOneAndUpdate({ riderId: riderId }, { availability: availability }, { "new": true });
+        case 1:
+          rider = _context7.v;
+          _riderCacheHelper.invalidateRider(riderId).catch(function () {});
+          return _context7.a(2, rider);
       }
     }, _callee7);
   }));
@@ -200,33 +214,68 @@ var setAvailability = exports.setAvailability = /*#__PURE__*/function () {
 }();
 var getRiderStats = exports.getRiderStats = /*#__PURE__*/function () {
   var _ref8 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee8(riderId) {
-    var rider;
+    var computeStats;
     return _regenerator().w(function (_context8) {
       while (1) switch (_context8.n) {
         case 0:
-          _context8.n = 1;
-          return _Rider.Rider.findOne({
-            riderId: riderId
-          });
-        case 1:
-          rider = _context8.v;
-          if (rider) {
-            _context8.n = 2;
-            break;
-          }
-          throw new Error("Rider not found");
-        case 2:
-          return _context8.a(2, {
-            riderId: rider.riderId,
-            name: rider.name,
-            stats: _objectSpread(_objectSpread({}, rider.stats), {}, {
-              averageRating: rider.stats.averageRating || 0,
-              totalRatings: rider.stats.totalRatings || 0
-            }),
-            earnings: rider.earnings,
-            status: rider.status,
-            availability: rider.availability
-          });
+          computeStats = /*#__PURE__*/function () {
+            var _ref8in = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee8in() {
+              var rider, delivered, onTimeCount, totalDelivered, acceptanceRate, onTimePct;
+              return _regenerator().w(function (_context8in) {
+                while (1) switch (_context8in.n) {
+                  case 0:
+                    _context8in.n = 1;
+                    return _Rider.Rider.findOne({ riderId: riderId });
+                  case 1:
+                    rider = _context8in.v;
+                    if (rider) { _context8in.n = 2; break; }
+                    throw new Error("Rider not found");
+                  case 2:
+                    _context8in.n = 3;
+                    return _Order.Order.find({
+                      "riderAssignment.riderId": riderId,
+                      status: "delivered",
+                      "riderAssignment.deliveredAt": { $exists: true, $ne: null }
+                    }).select("riderAssignment.deliveredAt delivery.scheduledTime");
+                  case 3:
+                    delivered = _context8in.v;
+                    onTimeCount = 0;
+                    totalDelivered = delivered.length;
+                    if (totalDelivered > 0) {
+                      delivered.forEach(function (o) {
+                        var deliveredAt = o.riderAssignment && o.riderAssignment.deliveredAt ? new Date(o.riderAssignment.deliveredAt) : null;
+                        var scheduled = o.delivery && o.delivery.scheduledTime ? new Date(o.delivery.scheduledTime) : null;
+                        if (deliveredAt && scheduled) {
+                          var slack = 30 * 60 * 1000;
+                          if (deliveredAt.getTime() <= scheduled.getTime() + slack) onTimeCount++;
+                        }
+                      });
+                    }
+                    acceptanceRate = rider.stats && rider.stats.completedDeliveries != null && rider.stats.totalDeliveries > 0
+                      ? Math.min(100, Math.round((rider.stats.completedDeliveries / rider.stats.totalDeliveries) * 1000) / 10)
+                      : 100;
+                    onTimePct = totalDelivered > 0 ? Math.round((onTimeCount / totalDelivered) * 1000) / 10 : 100;
+                    return _context8in.a(2, {
+                      riderId: rider.riderId,
+                      name: rider.name,
+                      stats: _objectSpread(_objectSpread({}, rider.stats), {}, {
+                        averageRating: rider.stats.averageRating || 0,
+                        totalRatings: rider.stats.totalRatings || 0,
+                        acceptanceRate: acceptanceRate + "%",
+                        onTimeDelivery: onTimePct + "%"
+                      }),
+                      earnings: rider.earnings,
+                      lifetimeEarnings: (rider.earnings && rider.earnings.totalEarned) || 0,
+                      floatingCash: (rider.earnings && rider.earnings.pendingAmount) || 0,
+                      status: rider.status,
+                      availability: rider.availability
+                    });
+                }
+              }, _callee8in);
+            }));
+            return function computeStats() { return _ref8in.apply(this, arguments); };
+          }();
+          return _context8.a(2, _riderCacheHelper.getCachedOrCompute("rider:stats:".concat(riderId), 30, computeStats));
       }
     }, _callee8);
   }));
@@ -236,17 +285,13 @@ var getRiderStats = exports.getRiderStats = /*#__PURE__*/function () {
 }();
 var updateRiderProfile = exports.updateRiderProfile = /*#__PURE__*/function () {
   var _ref9 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee9(riderId, updates) {
-    var update;
+    var update, rider;
     return _regenerator().w(function (_context9) {
       while (1) switch (_context9.n) {
         case 0:
           update = {};
-          if (updates.name) {
-            update.name = updates.name;
-          }
-          if (updates.email !== undefined) {
-            update.email = updates.email;
-          }
+          if (updates.name) update.name = updates.name;
+          if (updates.email !== undefined) update.email = updates.email;
           if (updates.vehicle) {
             update["vehicle.registrationNumber"] = updates.vehicle.registrationNumber;
             update["vehicle.model"] = updates.vehicle.model;
@@ -256,13 +301,12 @@ var updateRiderProfile = exports.updateRiderProfile = /*#__PURE__*/function () {
             update["bankDetails.ifscCode"] = updates.bankDetails.ifscCode;
             update["bankDetails.accountHolderName"] = updates.bankDetails.accountHolderName;
           }
-          return _context9.a(2, _Rider.Rider.findOneAndUpdate({
-            riderId: riderId
-          }, {
-            $set: update
-          }, {
-            "new": true
-          }));
+          _context9.n = 1;
+          return _Rider.Rider.findOneAndUpdate({ riderId: riderId }, { $set: update }, { "new": true });
+        case 1:
+          rider = _context9.v;
+          _riderCacheHelper.invalidateRider(riderId).catch(function () {});
+          return _context9.a(2, rider);
       }
     }, _callee9);
   }));
@@ -272,7 +316,7 @@ var updateRiderProfile = exports.updateRiderProfile = /*#__PURE__*/function () {
 }();
 var updateRiderPreferredLocation = exports.updateRiderPreferredLocation = /*#__PURE__*/function () {
   var _ref10 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee10(riderId, data) {
-    var preferred;
+    var preferred, rider;
     return _regenerator().w(function (_context10) {
       while (1) switch (_context10.n) {
         case 0:
@@ -288,13 +332,12 @@ var updateRiderPreferredLocation = exports.updateRiderPreferredLocation = /*#__P
               updatedAt: new Date()
             }
           };
-          return _context10.a(2, _Rider.Rider.findOneAndUpdate({
-            riderId: riderId
-          }, {
-            $set: preferred
-          }, {
-            "new": true
-          }));
+          _context10.n = 1;
+          return _Rider.Rider.findOneAndUpdate({ riderId: riderId }, { $set: preferred }, { "new": true });
+        case 1:
+          rider = _context10.v;
+          _riderCacheHelper.invalidateRider(riderId).catch(function () {});
+          return _context10.a(2, rider);
       }
     }, _callee10);
   }));
@@ -304,18 +347,21 @@ var updateRiderPreferredLocation = exports.updateRiderPreferredLocation = /*#__P
 }();
 var uploadDocument = exports.uploadDocument = /*#__PURE__*/function () {
   var _ref0 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee0(riderId, documentType, documentUrl) {
-    var updateField;
+    var updateField, rider;
     return _regenerator().w(function (_context0) {
       while (1) switch (_context0.n) {
         case 0:
           updateField = "documents.".concat(documentType, ".documentUrl");
-          return _context0.a(2, _Rider.Rider.findOneAndUpdate({
-            riderId: riderId
-          }, {
-            $set: _defineProperty({}, updateField, documentUrl)
-          }, {
-            "new": true
-          }));
+          _context0.n = 1;
+          return _Rider.Rider.findOneAndUpdate(
+            { riderId: riderId },
+            { $set: _defineProperty({}, updateField, documentUrl) },
+            { "new": true }
+          );
+        case 1:
+          rider = _context0.v;
+          _riderCacheHelper.invalidateRider(riderId).catch(function () {});
+          return _context0.a(2, rider);
       }
     }, _callee0);
   }));

@@ -212,6 +212,8 @@ if (signinRouter) {
 
 // Mount delivery/rider router (v2 or legacy)
 app.use('/api/v1/rider', riderRoutes);
+// Also mount at /api/v1/delivery for rider app (same router)
+app.use('/api/v1/delivery', riderRoutes);
 
 app.use('/api/v1/finance', financeRoutes);
 app.use('/api/v1/vendor', vendorRoutes);

@@ -7,6 +7,7 @@ Object.defineProperty(exports, "__esModule", {
 exports.rejectOrder = exports.markOrderPicked = exports.markOrderOutForDelivery = exports.markOrderDelivered = exports.listOrders = exports.getOrderById = exports.acceptOrder = void 0;
 var _Order = require("../../models/Order.js");
 var _Rider = require("../../models/Rider.js");
+var _riderCacheHelper = require("../../utils/riderCacheHelper.js");
 function ownKeys(e, r) { var t = Object.keys(e); if (Object.getOwnPropertySymbols) { var o = Object.getOwnPropertySymbols(e); r && (o = o.filter(function (r) { return Object.getOwnPropertyDescriptor(e, r).enumerable; })), t.push.apply(t, o); } return t; }
 function _objectSpread(e) { for (var r = 1; r < arguments.length; r++) { var t = null != arguments[r] ? arguments[r] : {}; r % 2 ? ownKeys(Object(t), !0).forEach(function (r) { _defineProperty(e, r, t[r]); }) : Object.getOwnPropertyDescriptors ? Object.defineProperties(e, Object.getOwnPropertyDescriptors(t)) : ownKeys(Object(t)).forEach(function (r) { Object.defineProperty(e, r, Object.getOwnPropertyDescriptor(t, r)); }); } return e; }
 function _defineProperty(e, r, t) { return (r = _toPropertyKey(r)) in e ? Object.defineProperty(e, r, { value: t, enumerable: !0, configurable: !0, writable: !0 }) : e[r] = t, e; }
@@ -31,27 +32,32 @@ var getOrderById = exports.getOrderById = /*#__PURE__*/function () {
 }();
 var listOrders = exports.listOrders = /*#__PURE__*/function () {
   var _ref2 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee2(filters) {
-    var query, limit;
+    var riderId, queryHash, key, compute;
     return _regenerator().w(function (_context2) {
       while (1) switch (_context2.n) {
         case 0:
-          query = {};
-          if (filters !== null && filters !== void 0 && filters.status) {
-            query.status = filters.status;
-          }
-          if (filters !== null && filters !== void 0 && filters.warehouseCode) {
-            query.warehouseCode = filters.warehouseCode;
-          }
-          if (filters !== null && filters !== void 0 && filters.riderId) {
-            query["riderAssignment.riderId"] = filters.riderId;
-          }
-          if (filters !== null && filters !== void 0 && filters.customerPhoneNumber) {
-            query.customerPhoneNumber = filters.customerPhoneNumber;
-          }
-          limit = (filters === null || filters === void 0 ? void 0 : filters.limit) || 50;
-          return _context2.a(2, _Order.Order.find(query).sort({
-            createdAt: -1
-          }).limit(limit));
+          riderId = (filters === null || filters === void 0 ? void 0 : filters.riderId) || "";
+          queryHash = [filters === null || filters === void 0 ? void 0 : filters.status, filters === null || filters === void 0 ? void 0 : filters.warehouseCode, (filters === null || filters === void 0 ? void 0 : filters.limit) || 50].join(":");
+          key = "rider:orders:".concat(riderId, ":").concat(queryHash);
+          compute = /*#__PURE__*/function () {
+            var _ref2in = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee2in() {
+              var query, limit;
+              return _regenerator().w(function (_context2in) {
+                while (1) switch (_context2in.n) {
+                  case 0:
+                    query = {};
+                    if (filters !== null && filters !== void 0 && filters.status) query.status = filters.status;
+                    if (filters !== null && filters !== void 0 && filters.warehouseCode) query.warehouseCode = filters.warehouseCode;
+                    if (filters !== null && filters !== void 0 && filters.riderId) query["riderAssignment.riderId"] = filters.riderId;
+                    if (filters !== null && filters !== void 0 && filters.customerPhoneNumber) query.customerPhoneNumber = filters.customerPhoneNumber;
+                    limit = (filters === null || filters === void 0 ? void 0 : filters.limit) || 50;
+                    return _context2in.a(2, _Order.Order.find(query).sort({ createdAt: -1 }).limit(limit).lean());
+                }
+              }, _callee2in);
+            }));
+            return function compute() { return _ref2in.apply(this, arguments); };
+          }();
+          return _context2.a(2, _riderCacheHelper.getCachedOrCompute(key, 15, compute));
       }
     }, _callee2);
   }));
@@ -99,6 +105,7 @@ var markOrderPicked = exports.markOrderPicked = /*#__PURE__*/function () {
           _context3.n = 5;
           return order.save();
         case 5:
+          _riderCacheHelper.invalidateOrdersForRider().catch(function () {});
           return _context3.a(2, order);
       }
     }, _callee3);
@@ -144,6 +151,7 @@ var markOrderOutForDelivery = exports.markOrderOutForDelivery = /*#__PURE__*/fun
           _context4.n = 5;
           return order.save();
         case 5:
+          _riderCacheHelper.invalidateOrdersForRider().catch(function () {});
           return _context4.a(2, order);
       }
     }, _callee4);
@@ -223,6 +231,7 @@ var markOrderDelivered = exports.markOrderDelivered = /*#__PURE__*/function () {
           _context5.n = 7;
           return order.save();
         case 7:
+          _riderCacheHelper.invalidateOrdersForRider().catch(function () {});
           return _context5.a(2, order);
       }
     }, _callee5);
@@ -273,6 +282,7 @@ var acceptOrder = exports.acceptOrder = /*#__PURE__*/function () {
           _context6.n = 5;
           return order.save();
         case 5:
+          _riderCacheHelper.invalidateOrdersForRider().catch(function () {});
           return _context6.a(2, order);
       }
     }, _callee6);
@@ -315,6 +325,7 @@ var rejectOrder = exports.rejectOrder = /*#__PURE__*/function () {
           _context7.n = 4;
           return order.save();
         case 4:
+          _riderCacheHelper.invalidateOrdersForRider().catch(function () {});
           return _context7.a(2, order);
       }
     }, _callee7);

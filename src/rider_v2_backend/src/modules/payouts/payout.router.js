@@ -98,6 +98,42 @@ router.post("/request", _authenticate.authenticate, /*#__PURE__*/function () {
     return _ref.apply(this, arguments);
   };
 }());
+router.get("/summary", _authenticate.authenticate, /*#__PURE__*/function () {
+  var _refSummary = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _calleeSummary(req, res) {
+    var riderId, period, summary, _tSummary;
+    return _regenerator().w(function (_contextSummary) {
+      while (1) switch (_contextSummary.p = _contextSummary.n) {
+        case 0:
+          if (req.user) {
+            _contextSummary.n = 1;
+            break;
+          }
+          res.status(401).json({ error: "Unauthorized" });
+          return _contextSummary.a(2);
+        case 1:
+          riderId = req.user.id;
+          period = (req.query.period && ['today', 'week', 'month'].includes(req.query.period)) ? req.query.period : 'today';
+          _contextSummary.n = 2;
+          return payoutService.getEarningsSummary(riderId, period);
+        case 2:
+          summary = _contextSummary.v;
+          res.json(summary);
+          _contextSummary.n = 4;
+          break;
+        case 3:
+          _contextSummary.p = 3;
+          _tSummary = _contextSummary.v;
+          console.error("Failed to get earnings summary:", _tSummary);
+          res.status(500).json({ error: "Failed to get earnings summary" });
+        case 4:
+          return _contextSummary.a(2);
+      }
+    }, _calleeSummary, null, [[1, 3]]);
+  }));
+  return function (_x, _x2) {
+    return _refSummary.apply(this, arguments);
+  };
+}());
 router.get("/", _authenticate.authenticate, /*#__PURE__*/function () {
   var _ref2 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee2(req, res) {
     var riderId, limit, payouts, _t2;
