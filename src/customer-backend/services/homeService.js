@@ -18,7 +18,12 @@ async function resolveProducts(productIds = []) {
 
 async function getHomePayload(req = {}) {
   const config = await HomeConfig.findOne({ key: 'main' }).lean();
-  const categories = await Category.find({ isActive: true }).sort({ order: 1 }).lean();
+  const categories = await Category.find({
+    isActive: true,
+    parentId: { $in: [null, undefined] },
+  })
+  .sort({ order: 1 })
+  .lean();
   const heroBanners = await Banner.find({ slot: 'hero', isActive: true }).sort({ order: 1 }).lean();
   const midBanners = await Banner.find({ slot: 'mid', isActive: true }).sort({ order: 1 }).lean();
   const sectionsDocs = await HomeSection.find({ isActive: true }).lean();
