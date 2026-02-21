@@ -5,6 +5,7 @@ const { HomeSection } = require('../models/HomeSection');
 const { Product } = require('../models/Product');
 const { LifestyleItem } = require('../models/LifestyleItem');
 const { PromoBlock } = require('../models/PromoBlock');
+const { getDefaultAddress } = require('./addressService');
 
 async function resolveProducts(productIds = []) {
   if (!Array.isArray(productIds) || productIds.length === 0) return [];
@@ -15,7 +16,7 @@ async function resolveProducts(productIds = []) {
   return productIds.map((id) => map.get(String(id))).filter(Boolean);
 }
 
-async function getHomePayload() {
+async function getHomePayload(req = {}) {
   const config = await HomeConfig.findOne({ key: 'main' }).lean();
   const categories = await Category.find({ isActive: true }).sort({ order: 1 }).lean();
   const heroBanners = await Banner.find({ slot: 'hero', isActive: true }).sort({ order: 1 }).lean();
@@ -32,6 +33,13 @@ async function getHomePayload() {
   for (const p of promoBlocksList) {
     promoBlocks[p.blockKey] = { imageUrl: p.imageUrl, link: p.link };
   }
+
+  let defaultAddress = null;
+  const userId = req?.user?._id;
+  if (userId) {
+    defaultAddress = await getDefaultAddress(userId);
+  }
+
   return {
     config: config || null,
     categories: categories || [],
@@ -40,6 +48,7 @@ async function getHomePayload() {
     sections,
     lifestyle,
     promoBlocks,
+    defaultAddress: defaultAddress || null,
   };
 }
 

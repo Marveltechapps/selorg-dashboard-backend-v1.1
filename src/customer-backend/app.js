@@ -12,6 +12,7 @@ const productsRoutes = require('./routes/productsRoutes');
 const adminHomeRoutes = require('./routes/admin/homeAdminRoutes');
 const userRoutes = require('./routes/userRoutes');
 const legalRoutes = require('./routes/legalRoutes');
+const addressRoutes = require('./routes/addressRoutes');
 
 const app = express();
 
@@ -25,6 +26,7 @@ app.use('/products', productsRoutes);
 app.use('/admin/home', adminHomeRoutes);
 app.use('/user', userRoutes);
 app.use('/legal', legalRoutes);
+app.use('/addresses', addressRoutes);
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true });
