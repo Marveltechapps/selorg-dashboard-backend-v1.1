@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const { authenticateToken } = require('../../core/middleware');
 
 // Import all shared routes
 const alertsRoutes = require('./alertsRoutes');
@@ -13,7 +14,8 @@ const inventorySyncRoutes = require('./inventorySyncRoutes');
 const bulkOperationsRoutes = require('./bulkOperationsRoutes');
 const workflowAutomationRoutes = require('./workflowAutomationRoutes');
 
-// Mount all routes
+// All shared routes require JWT (any authenticated dashboard role)
+router.use(authenticateToken);
 router.use('/alerts', alertsRoutes);
 router.use('/analytics', analyticsRoutes);
 router.use('/approvals', approvalsRoutes);

@@ -22,7 +22,7 @@ const apiLimiter = rateLimit({
 // Auth endpoints rate limiter (stricter)
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: parseInt(process.env.AUTH_RATE_LIMIT_MAX || '100', 10), // Default 100 requests per 15 minutes
+  max: parseInt(process.env.AUTH_RATE_LIMIT_MAX || '10', 10), // Default 10 failed attempts per 15 min per IP
   message: {
     success: false,
     error: {
@@ -30,8 +30,10 @@ const authLimiter = rateLimit({
       message: 'Too many login attempts, please try again later.',
     },
   },
-  skipSuccessfulRequests: true, // Don't count successful requests
-  skipFailedRequests: false, // Count failed requests
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true, // Don't count successful logins
+  skipFailedRequests: false,
 });
 
 module.exports = {

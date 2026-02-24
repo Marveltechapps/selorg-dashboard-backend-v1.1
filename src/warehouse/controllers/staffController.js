@@ -3,6 +3,7 @@ const cache = require('../../utils/cache');
 const logger = require('../../core/utils/logger');
 const { getCachedOrCompute, hashForKey } = require('../../utils/cacheHelper');
 const appConfig = require('../../config/app');
+const cacheInvalidation = require('../cacheInvalidation');
 
 /**
  * Get staff summary (read-through cache)
@@ -100,6 +101,7 @@ const createShift = async (req, res, next) => {
     await cache.delByPattern('staff:*');
     await cache.del('staff:summary');
     await cache.delByPattern(`staff:shifts:*`);
+    await cacheInvalidation.invalidateWarehouse().catch(() => {});
     
     res.status(201).json(shift);
   } catch (error) {
@@ -157,6 +159,7 @@ const updateShift = async (req, res, next) => {
     await cache.delByPattern('staff:*');
     await cache.del('staff:summary');
     await cache.delByPattern(`staff:shifts:*`);
+    await cacheInvalidation.invalidateWarehouse().catch(() => {});
     
     res.status(200).json(shift);
   } catch (error) {

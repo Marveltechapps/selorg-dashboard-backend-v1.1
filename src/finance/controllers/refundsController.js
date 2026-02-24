@@ -1,5 +1,6 @@
 const refundsService = require('../services/refundsService');
 const { asyncHandler } = require('../../core/middleware');
+const cacheInvalidation = require('../cacheInvalidation');
 
 class RefundsController {
   getRefundsSummary = asyncHandler(async (req, res) => {
@@ -22,6 +23,7 @@ class RefundsController {
     const { id } = req.params;
     const { notes, partialAmount } = req.body;
     const refund = await refundsService.approveRefund(id, notes, partialAmount);
+    await cacheInvalidation.invalidateFinance().catch(() => {});
     res.json({ success: true, data: refund });
   });
 
@@ -29,6 +31,7 @@ class RefundsController {
     const { id } = req.params;
     const { reason } = req.body;
     const refund = await refundsService.rejectRefund(id, reason);
+    await cacheInvalidation.invalidateFinance().catch(() => {});
     res.json({ success: true, data: refund });
   });
 

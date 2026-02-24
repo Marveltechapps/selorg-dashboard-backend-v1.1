@@ -1,7 +1,28 @@
+const mongoose = require('mongoose');
 const User = require('../models/User');
 const Role = require('../models/Role');
+const AuditLog = require('../../common-models/AuditLog');
 const bcrypt = require('bcryptjs');
 const logger = require('../../core/utils/logger');
+const cacheInvalidation = require('../cacheInvalidation');
+
+async function auditAdminAction(req, moduleName, action, entityType, entityId, details = {}) {
+  try {
+    await AuditLog.create({
+      module: moduleName,
+      action,
+      entityType,
+      entityId: entityId ? String(entityId) : undefined,
+      userId: req.user?.userId ? new mongoose.Types.ObjectId(req.user.userId) : undefined,
+      severity: action.startsWith('user_delete') ? 'critical' : 'info',
+      details,
+      ipAddress: req.ip || req.connection?.remoteAddress || req.headers?.['x-forwarded-for']?.split(',')[0]?.trim(),
+      userAgent: req.get?.('user-agent'),
+    });
+  } catch (err) {
+    logger.warn('AuditLog create failed', { err: err.message, action });
+  }
+}
 
 /**
  * Get all users
@@ -207,6 +228,9 @@ const createUser = async (req, res, next) => {
       createdBy: req.user?.userId,
       requestId: req.id,
     });
+    await auditAdminAction(req, 'admin', 'user_create', 'User', user._id.toString(), { email: user.email });
+
+    await cacheInvalidation.invalidateUsers().catch(() => {});
 
     res.status(201).json({
       success: true,
@@ -309,6 +333,9 @@ const updateUser = async (req, res, next) => {
       updatedBy: req.user?.userId,
       requestId: req.id,
     });
+    await auditAdminAction(req, 'admin', 'user_update', 'User', id, { email: user.email });
+
+    await cacheInvalidation.invalidateUsers().catch(() => {});
 
     res.json({
       success: true,
@@ -363,6 +390,9 @@ const deleteUser = async (req, res, next) => {
       deletedBy: req.user?.userId,
       requestId: req.id,
     });
+    await auditAdminAction(req, 'admin', 'user_delete', 'User', id, { email: user.email });
+
+    await cacheInvalidation.invalidateUsers().catch(() => {});
 
     res.json({
       success: true,
@@ -451,6 +481,9 @@ const assignRole = async (req, res, next) => {
       assignedBy: req.user?.userId,
       requestId: req.id,
     });
+    await auditAdminAction(req, 'admin', 'role_assign', 'User', id, { roleId: String(roleId), roleName: role.name });
+
+    await cacheInvalidation.invalidateUsers().catch(() => {});
 
     res.json({
       success: true,

@@ -1,5 +1,6 @@
 const Permission = require('../models/Permission');
 const logger = require('../../core/utils/logger');
+const cacheInvalidation = require('../cacheInvalidation');
 
 /**
  * Get all permissions
@@ -142,6 +143,8 @@ const createPermission = async (req, res, next) => {
       requestId: req.id,
     });
 
+    await cacheInvalidation.invalidatePermissions().catch(() => {});
+
     res.status(201).json({
       success: true,
       data: permObj,
@@ -202,6 +205,8 @@ const updatePermission = async (req, res, next) => {
       requestId: req.id,
     });
 
+    await cacheInvalidation.invalidatePermissions().catch(() => {});
+
     res.json({
       success: true,
       data: permObj,
@@ -249,6 +254,8 @@ const deletePermission = async (req, res, next) => {
       permissionName: permission.name,
       requestId: req.id,
     });
+
+    await cacheInvalidation.invalidatePermissions().catch(() => {});
 
     res.json({
       success: true,

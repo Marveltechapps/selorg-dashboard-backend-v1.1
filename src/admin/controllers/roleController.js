@@ -2,6 +2,7 @@ const Role = require('../models/Role');
 const User = require('../models/User');
 const logger = require('../../core/utils/logger');
 const ErrorResponse = require('../../core/utils/ErrorResponse');
+const cacheInvalidation = require('../cacheInvalidation');
 
 /**
  * Get all roles
@@ -158,6 +159,8 @@ const createRole = async (req, res, next) => {
       requestId: req.id,
     });
 
+    await cacheInvalidation.invalidateRoles().catch(() => {});
+
     res.status(201).json({
       success: true,
       data: {
@@ -258,6 +261,8 @@ const updateRole = async (req, res, next) => {
       requestId: req.id,
     });
 
+    await cacheInvalidation.invalidateRoles().catch(() => {});
+
     res.json({
       success: true,
       data: {
@@ -340,6 +345,8 @@ const deleteRole = async (req, res, next) => {
       deletedBy: req.user?.userId,
       requestId: req.id,
     });
+
+    await cacheInvalidation.invalidateRoles().catch(() => {});
 
     res.json({
       success: true,

@@ -1,4 +1,11 @@
-const { getAddressesByUserId, getDefaultAddress } = require('../services/addressService');
+const {
+  getAddressesByUserId,
+  getDefaultAddress,
+  createAddress,
+  updateAddress,
+  deleteAddress,
+  setDefaultAddress,
+} = require('../services/addressService');
 
 async function list(req, res) {
   try {
@@ -30,4 +37,76 @@ async function getDefault(req, res) {
   }
 }
 
-module.exports = { list, getDefault };
+async function create(req, res) {
+  try {
+    const userId = req.user?._id;
+    if (!userId) {
+      res.status(401).json({ success: false, message: 'Unauthorized' });
+      return;
+    }
+    const address = await createAddress(userId, req.body);
+    res.status(201).json({ success: true, data: address });
+  } catch (err) {
+    console.error('address create error:', err);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+}
+
+async function update(req, res) {
+  try {
+    const userId = req.user?._id;
+    if (!userId) {
+      res.status(401).json({ success: false, message: 'Unauthorized' });
+      return;
+    }
+    const address = await updateAddress(userId, req.params.id, req.body);
+    if (!address) {
+      res.status(404).json({ success: false, message: 'Address not found' });
+      return;
+    }
+    res.status(200).json({ success: true, data: address });
+  } catch (err) {
+    console.error('address update error:', err);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+}
+
+async function remove(req, res) {
+  try {
+    const userId = req.user?._id;
+    if (!userId) {
+      res.status(401).json({ success: false, message: 'Unauthorized' });
+      return;
+    }
+    const deleted = await deleteAddress(userId, req.params.id);
+    if (!deleted) {
+      res.status(404).json({ success: false, message: 'Address not found' });
+      return;
+    }
+    res.status(200).json({ success: true });
+  } catch (err) {
+    console.error('address delete error:', err);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+}
+
+async function setDefault(req, res) {
+  try {
+    const userId = req.user?._id;
+    if (!userId) {
+      res.status(401).json({ success: false, message: 'Unauthorized' });
+      return;
+    }
+    const address = await setDefaultAddress(userId, req.params.id);
+    if (!address) {
+      res.status(404).json({ success: false, message: 'Address not found' });
+      return;
+    }
+    res.status(200).json({ success: true, data: address });
+  } catch (err) {
+    console.error('address setDefault error:', err);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+}
+
+module.exports = { list, getDefault, create, update, remove, setDefault };

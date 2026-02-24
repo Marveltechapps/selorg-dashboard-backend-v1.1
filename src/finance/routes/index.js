@@ -9,8 +9,9 @@ const invoicingController = require('../controllers/invoicingController');
 const financeAlertsController = require('../controllers/financeAlertsController');
 const financeAnalyticsController = require('../controllers/financeAnalyticsController');
 const approvalsController = require('../controllers/approvalsController');
-const { authenticateToken } = require('../../core/middleware');
+const { authenticateToken, requireRole, cacheMiddleware } = require('../../core/middleware');
 const { validateRequest } = require('../../middleware/zodValidator');
+const appConfig = require('../../config/app');
 const {
   getFinanceSummarySchema,
   getPaymentMethodSplitSchema,
@@ -67,85 +68,88 @@ const router = Router();
 // Import auth routes
 const authRoutes = require('./authRoutes');
 
-// Mount auth routes
+// Mount auth routes (login only)
 router.use('/auth', authRoutes);
 
+// All finance routes require JWT and role: finance, admin, super_admin
+const financeAuth = [authenticateToken, requireRole('finance', 'admin', 'super_admin')];
+
 // Finance Overview routes
-router.get('/summary', authenticateToken, validateRequest(getFinanceSummarySchema), financeDashboardController.getFinanceSummary);
-router.get('/payment-method-split', authenticateToken, validateRequest(getPaymentMethodSplitSchema), financeDashboardController.getPaymentMethodSplit);
-router.get('/live-transactions', authenticateToken, validateRequest(getLiveTransactionsSchema), financeDashboardController.getLiveTransactions);
-router.get('/daily-metrics', authenticateToken, validateRequest(getDailyMetricsSchema), financeDashboardController.getDailyMetrics);
-router.get('/gateway-status', authenticateToken, validateRequest(getGatewayStatusSchema), financeDashboardController.getGatewayStatus);
-router.get('/hourly-trends', authenticateToken, validateRequest(getHourlyTrendsSchema), financeDashboardController.getHourlyTrends);
-router.post('/export', authenticateToken, validateRequest(exportFinanceReportSchema), financeDashboardController.exportFinanceReport);
+router.get('/summary', ...financeAuth, cacheMiddleware(appConfig.cache.finance.summary), validateRequest(getFinanceSummarySchema), financeDashboardController.getFinanceSummary);
+router.get('/payment-method-split', ...financeAuth, cacheMiddleware(appConfig.cache.finance.summary), validateRequest(getPaymentMethodSplitSchema), financeDashboardController.getPaymentMethodSplit);
+router.get('/live-transactions', ...financeAuth, cacheMiddleware(appConfig.cache.finance.payments), validateRequest(getLiveTransactionsSchema), financeDashboardController.getLiveTransactions);
+router.get('/daily-metrics', ...financeAuth, cacheMiddleware(appConfig.cache.finance.summary), validateRequest(getDailyMetricsSchema), financeDashboardController.getDailyMetrics);
+router.get('/gateway-status', ...financeAuth, cacheMiddleware(appConfig.cache.finance.payments), validateRequest(getGatewayStatusSchema), financeDashboardController.getGatewayStatus);
+router.get('/hourly-trends', ...financeAuth, cacheMiddleware(appConfig.cache.finance.summary), validateRequest(getHourlyTrendsSchema), financeDashboardController.getHourlyTrends);
+router.post('/export', ...financeAuth, validateRequest(exportFinanceReportSchema), financeDashboardController.exportFinanceReport);
 
 // Customer Payments routes
-router.get('/customer-payments', authenticateToken, validateRequest(getCustomerPaymentsSchema), customerPaymentsController.getCustomerPayments);
-router.get('/customer-payments/:id', authenticateToken, validateRequest(getCustomerPaymentDetailsSchema), customerPaymentsController.getCustomerPaymentDetails);
-router.post('/customer-payments/:id/retry', authenticateToken, validateRequest(retryCustomerPaymentSchema), customerPaymentsController.retryCustomerPayment);
+router.get('/customer-payments', ...financeAuth, cacheMiddleware(appConfig.cache.finance.payments), validateRequest(getCustomerPaymentsSchema), customerPaymentsController.getCustomerPayments);
+router.get('/customer-payments/:id', ...financeAuth, cacheMiddleware(appConfig.cache.finance.payments), validateRequest(getCustomerPaymentDetailsSchema), customerPaymentsController.getCustomerPaymentDetails);
+router.post('/customer-payments/:id/retry', ...financeAuth, validateRequest(retryCustomerPaymentSchema), customerPaymentsController.retryCustomerPayment);
 
 // Vendor Payments routes
-router.get('/vendor-payments/summary', authenticateToken, vendorPaymentsController.getPayablesSummary);
-router.get('/vendor-payments/invoices', authenticateToken, validateRequest(getVendorInvoicesSchema), vendorPaymentsController.getVendorInvoices);
-router.post('/vendor-payments/invoices', authenticateToken, validateRequest(uploadInvoiceSchema), vendorPaymentsController.uploadInvoice);
-router.get('/vendor-payments/invoices/:id', authenticateToken, validateRequest(getVendorInvoiceDetailsSchema), vendorPaymentsController.getVendorInvoiceDetails);
-router.post('/vendor-payments/invoices/:id/approve', authenticateToken, validateRequest(approveInvoiceSchema), vendorPaymentsController.approveInvoice);
-router.post('/vendor-payments/invoices/:id/reject', authenticateToken, validateRequest(rejectInvoiceSchema), vendorPaymentsController.rejectInvoice);
-router.post('/vendor-payments/invoices/:id/mark-paid', authenticateToken, validateRequest(markInvoicePaidSchema), vendorPaymentsController.markInvoicePaid);
-router.post('/vendor-payments/payments', authenticateToken, validateRequest(createPaymentSchema), vendorPaymentsController.createPayment);
-router.get('/vendor-payments/vendors', authenticateToken, vendorPaymentsController.getVendors);
+router.get('/vendor-payments/summary', ...financeAuth, cacheMiddleware(appConfig.cache.finance.payments), vendorPaymentsController.getPayablesSummary);
+router.get('/vendor-payments/invoices', ...financeAuth, cacheMiddleware(appConfig.cache.finance.payments), validateRequest(getVendorInvoicesSchema), vendorPaymentsController.getVendorInvoices);
+router.post('/vendor-payments/invoices', ...financeAuth, validateRequest(uploadInvoiceSchema), vendorPaymentsController.uploadInvoice);
+router.get('/vendor-payments/invoices/:id', ...financeAuth, cacheMiddleware(appConfig.cache.finance.payments), validateRequest(getVendorInvoiceDetailsSchema), vendorPaymentsController.getVendorInvoiceDetails);
+router.post('/vendor-payments/invoices/:id/approve', ...financeAuth, validateRequest(approveInvoiceSchema), vendorPaymentsController.approveInvoice);
+router.post('/vendor-payments/invoices/:id/reject', ...financeAuth, validateRequest(rejectInvoiceSchema), vendorPaymentsController.rejectInvoice);
+router.post('/vendor-payments/invoices/:id/mark-paid', ...financeAuth, validateRequest(markInvoicePaidSchema), vendorPaymentsController.markInvoicePaid);
+router.post('/vendor-payments/payments', ...financeAuth, validateRequest(createPaymentSchema), vendorPaymentsController.createPayment);
+router.get('/vendor-payments/vendors', ...financeAuth, cacheMiddleware(appConfig.cache.finance.payments), vendorPaymentsController.getVendors);
 
 // Refunds routes
-router.get('/refunds/summary', authenticateToken, refundsController.getRefundsSummary);
-router.get('/refunds/queue', authenticateToken, validateRequest(getRefundQueueSchema), refundsController.getRefundQueue);
+router.get('/refunds/summary', ...financeAuth, cacheMiddleware(appConfig.cache.finance.refunds), refundsController.getRefundsSummary);
+router.get('/refunds/queue', ...financeAuth, cacheMiddleware(appConfig.cache.finance.refunds), validateRequest(getRefundQueueSchema), refundsController.getRefundQueue);
 // Place specific routes before parameterized routes to avoid accidental param matching (e.g. "chargebacks" being treated as :id)
-router.get('/refunds/chargebacks', authenticateToken, refundsController.getChargebacks);
-router.get('/refunds/:id', authenticateToken, validateRequest(getRefundDetailsSchema), refundsController.getRefundDetails);
-router.post('/refunds/:id/approve', authenticateToken, validateRequest(approveRefundSchema), refundsController.approveRefund);
-router.post('/refunds/:id/reject', authenticateToken, validateRequest(rejectRefundSchema), refundsController.rejectRefund);
+router.get('/refunds/chargebacks', ...financeAuth, cacheMiddleware(appConfig.cache.finance.refunds), refundsController.getChargebacks);
+router.get('/refunds/:id', ...financeAuth, cacheMiddleware(appConfig.cache.finance.refunds), validateRequest(getRefundDetailsSchema), refundsController.getRefundDetails);
+router.post('/refunds/:id/approve', ...financeAuth, validateRequest(approveRefundSchema), refundsController.approveRefund);
+router.post('/refunds/:id/reject', ...financeAuth, validateRequest(rejectRefundSchema), refundsController.rejectRefund);
 
 // Reconciliation routes
-router.get('/reconciliation/summary', authenticateToken, validateRequest(getReconSummarySchema), reconciliationController.getReconSummary);
-router.get('/reconciliation/exceptions', authenticateToken, validateRequest(getExceptionsSchema), reconciliationController.getExceptions);
-router.post('/reconciliation/run', authenticateToken, validateRequest(runReconciliationSchema), reconciliationController.runReconciliation);
-router.get('/reconciliation/runs/:id', authenticateToken, validateRequest(getRunStatusSchema), reconciliationController.getRunStatus);
-router.post('/reconciliation/exceptions/:id/investigate', authenticateToken, validateRequest(investigateExceptionSchema), reconciliationController.investigateException);
-router.post('/reconciliation/exceptions/:id/resolve', authenticateToken, validateRequest(resolveExceptionSchema), reconciliationController.resolveException);
-router.get('/reconciliation/gateways/:id', authenticateToken, validateRequest(getGatewayDetailsSchema), reconciliationController.getGatewayDetails);
+router.get('/reconciliation/summary', ...financeAuth, cacheMiddleware(appConfig.cache.finance.reconciliation), validateRequest(getReconSummarySchema), reconciliationController.getReconSummary);
+router.get('/reconciliation/exceptions', ...financeAuth, cacheMiddleware(appConfig.cache.finance.reconciliation), validateRequest(getExceptionsSchema), reconciliationController.getExceptions);
+router.post('/reconciliation/run', ...financeAuth, validateRequest(runReconciliationSchema), reconciliationController.runReconciliation);
+router.get('/reconciliation/runs/:id', ...financeAuth, cacheMiddleware(appConfig.cache.finance.reconciliation), validateRequest(getRunStatusSchema), reconciliationController.getRunStatus);
+router.post('/reconciliation/exceptions/:id/investigate', ...financeAuth, validateRequest(investigateExceptionSchema), reconciliationController.investigateException);
+router.post('/reconciliation/exceptions/:id/resolve', ...financeAuth, validateRequest(resolveExceptionSchema), reconciliationController.resolveException);
+router.get('/reconciliation/gateways/:id', ...financeAuth, cacheMiddleware(appConfig.cache.finance.reconciliation), validateRequest(getGatewayDetailsSchema), reconciliationController.getGatewayDetails);
 
 // Ledger routes
-router.get('/ledger/summary', authenticateToken, accountingController.getAccountingSummary);
-router.get('/ledger/entries', authenticateToken, validateRequest(getLedgerEntriesSchema), accountingController.getLedgerEntries);
-router.get('/ledger/accounts', authenticateToken, accountingController.getAccounts);
-router.post('/ledger/journal-entries', authenticateToken, validateRequest(createJournalEntrySchema), accountingController.createJournalEntry);
-router.get('/ledger/journal-entries/:id', authenticateToken, validateRequest(getJournalDetailsSchema), accountingController.getJournalDetails);
+router.get('/ledger/summary', ...financeAuth, cacheMiddleware(appConfig.cache.finance.ledger), accountingController.getAccountingSummary);
+router.get('/ledger/entries', ...financeAuth, cacheMiddleware(appConfig.cache.finance.ledger), validateRequest(getLedgerEntriesSchema), accountingController.getLedgerEntries);
+router.get('/ledger/accounts', ...financeAuth, cacheMiddleware(appConfig.cache.finance.ledger), accountingController.getAccounts);
+router.post('/ledger/journal-entries', ...financeAuth, validateRequest(createJournalEntrySchema), accountingController.createJournalEntry);
+router.get('/ledger/journal-entries/:id', ...financeAuth, cacheMiddleware(appConfig.cache.finance.ledger), validateRequest(getJournalDetailsSchema), accountingController.getJournalDetails);
 
 // Invoicing routes
-router.get('/invoices/summary', authenticateToken, invoicingController.getInvoiceSummary);
-router.get('/invoices', authenticateToken, validateRequest(getInvoicesSchema), invoicingController.getInvoices);
-router.post('/invoices', authenticateToken, validateRequest(createInvoiceSchema), invoicingController.createInvoice);
-router.get('/invoices/:id', authenticateToken, validateRequest(getInvoiceDetailsSchema), invoicingController.getInvoiceDetails);
-router.patch('/invoices/:id/status', authenticateToken, validateRequest(updateInvoiceStatusSchema), invoicingController.updateInvoiceStatus);
-router.post('/invoices/:id/send', authenticateToken, validateRequest(sendInvoiceSchema), invoicingController.sendInvoice);
-router.post('/invoices/:id/send-reminder', authenticateToken, validateRequest(sendReminderSchema), invoicingController.sendReminder);
-router.post('/invoices/:id/mark-paid', authenticateToken, validateRequest(markInvoicePaidSchema2), invoicingController.markInvoicePaid);
+router.get('/invoices/summary', ...financeAuth, cacheMiddleware(appConfig.cache.finance.invoices), invoicingController.getInvoiceSummary);
+router.get('/invoices', ...financeAuth, cacheMiddleware(appConfig.cache.finance.invoices), validateRequest(getInvoicesSchema), invoicingController.getInvoices);
+router.post('/invoices', ...financeAuth, validateRequest(createInvoiceSchema), invoicingController.createInvoice);
+router.get('/invoices/:id', ...financeAuth, cacheMiddleware(appConfig.cache.finance.invoices), validateRequest(getInvoiceDetailsSchema), invoicingController.getInvoiceDetails);
+router.patch('/invoices/:id/status', ...financeAuth, validateRequest(updateInvoiceStatusSchema), invoicingController.updateInvoiceStatus);
+router.post('/invoices/:id/send', ...financeAuth, validateRequest(sendInvoiceSchema), invoicingController.sendInvoice);
+router.post('/invoices/:id/send-reminder', ...financeAuth, validateRequest(sendReminderSchema), invoicingController.sendReminder);
+router.post('/invoices/:id/mark-paid', ...financeAuth, validateRequest(markInvoicePaidSchema2), invoicingController.markInvoicePaid);
 
 // Finance Alerts routes
-router.get('/alerts', authenticateToken, validateRequest(getAlertsSchema), financeAlertsController.getAlerts);
-router.get('/alerts/:id', authenticateToken, validateRequest(getAlertDetailsSchema), financeAlertsController.getAlertDetails);
-router.post('/alerts/:id/action', authenticateToken, validateRequest(performAlertActionSchema), financeAlertsController.performAlertAction);
-router.post('/alerts/clear-resolved', authenticateToken, financeAlertsController.clearResolvedAlerts);
+router.get('/alerts', ...financeAuth, cacheMiddleware(appConfig.cache.alerts), validateRequest(getAlertsSchema), financeAlertsController.getAlerts);
+router.get('/alerts/:id', ...financeAuth, cacheMiddleware(appConfig.cache.alerts), validateRequest(getAlertDetailsSchema), financeAlertsController.getAlertDetails);
+router.post('/alerts/:id/action', ...financeAuth, validateRequest(performAlertActionSchema), financeAlertsController.performAlertAction);
+router.post('/alerts/clear-resolved', ...financeAuth, financeAlertsController.clearResolvedAlerts);
 
 // Finance Analytics routes
-router.get('/analytics/revenue-growth', authenticateToken, validateRequest(getRevenueGrowthSchema), financeAnalyticsController.getRevenueGrowth);
-router.get('/analytics/cash-flow', authenticateToken, validateRequest(getCashFlowSchema), financeAnalyticsController.getCashFlow);
-router.get('/analytics/expense-breakdown', authenticateToken, validateRequest(getExpenseBreakdownSchema), financeAnalyticsController.getExpenseBreakdown);
-router.post('/analytics/export', authenticateToken, validateRequest(exportAnalyticsReportSchema), financeAnalyticsController.exportAnalyticsReport);
+router.get('/analytics/revenue-growth', ...financeAuth, cacheMiddleware(appConfig.cache.finance.analytics), validateRequest(getRevenueGrowthSchema), financeAnalyticsController.getRevenueGrowth);
+router.get('/analytics/cash-flow', ...financeAuth, cacheMiddleware(appConfig.cache.finance.analytics), validateRequest(getCashFlowSchema), financeAnalyticsController.getCashFlow);
+router.get('/analytics/expense-breakdown', ...financeAuth, cacheMiddleware(appConfig.cache.finance.analytics), validateRequest(getExpenseBreakdownSchema), financeAnalyticsController.getExpenseBreakdown);
+router.post('/analytics/export', ...financeAuth, validateRequest(exportAnalyticsReportSchema), financeAnalyticsController.exportAnalyticsReport);
 
 // Approvals routes
-router.get('/approvals/summary', authenticateToken, approvalsController.getApprovalSummary);
-router.get('/approvals/tasks', authenticateToken, validateRequest(getApprovalTasksSchema), approvalsController.getApprovalTasks);
-router.get('/approvals/tasks/:id', authenticateToken, validateRequest(getTaskDetailsSchema), approvalsController.getTaskDetails);
-router.post('/approvals/tasks/:id/decision', authenticateToken, validateRequest(submitTaskDecisionSchema), approvalsController.submitTaskDecision);
+router.get('/approvals/summary', ...financeAuth, cacheMiddleware(appConfig.cache.finance.approvals), approvalsController.getApprovalSummary);
+router.get('/approvals/tasks', ...financeAuth, cacheMiddleware(appConfig.cache.finance.approvals), validateRequest(getApprovalTasksSchema), approvalsController.getApprovalTasks);
+router.get('/approvals/tasks/:id', ...financeAuth, cacheMiddleware(appConfig.cache.finance.approvals), validateRequest(getTaskDetailsSchema), approvalsController.getTaskDetails);
+router.post('/approvals/tasks/:id/decision', ...financeAuth, validateRequest(submitTaskDecisionSchema), approvalsController.submitTaskDecision);
 
 module.exports = router;

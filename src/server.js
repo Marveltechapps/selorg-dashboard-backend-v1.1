@@ -16,6 +16,7 @@ const connectDB = require('./config/db');
 const websocketService = require('./utils/websocket');
 const { requestIdMiddleware, errorHandler, validateJWTSecret } = require('./core/middleware');
 const { requestLoggerMiddleware } = require('./core/middleware/requestLogger.middleware');
+const { apiLimiter } = require('./middleware/rateLimiter');
 const validateEnvironment = require('./config/validateEnv');
 const logger = require('./core/utils/logger');
 
@@ -179,6 +180,9 @@ app.use((req, res, next) => {
   if (isCustomerPath) return customerCors(req, res, next);
   return strictCors(req, res, next);
 });
+
+// General API rate limit (per IP) for all /api/v1 routes
+app.use('/api/v1', apiLimiter);
 
 // Mount dashboard routers under /api/v1/<dashboard-name>
 app.use('/api/v1/darkstore', darkstoreRoutes);

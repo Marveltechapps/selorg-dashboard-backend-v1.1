@@ -60,6 +60,9 @@ const uploadPath = process.env.UPLOAD_PATH || path.join(__dirname, '../../upload
 app.use('/uploads', express.static(path.resolve(uploadPath)));
 
 app.use(generalLimiter);
+const { cacheMiddleware } = require('../core/middleware');
+const appConfig = require('../config/app');
+app.use(cacheMiddleware(appConfig.cache.hhd.default));
 app.use('/auth', authRoutes);
 app.use('/orders', orderRoutes);
 app.use('/bags', bagRoutes);

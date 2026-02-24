@@ -1,7 +1,6 @@
 const mongoose = require('mongoose');
 const { sendSuccess, sendError } = require('../utils/apiResponse');
 const logger = require('../utils/logger');
-const cacheService = require('../services/cache.service');
 
 /**
  * Health check controller
@@ -57,30 +56,8 @@ const readinessCheck = async (req, res) => {
     overallStatus = 'not_ready';
   }
 
-  // Check Redis connection (if configured)
-  try {
-    if (process.env.REDIS_URL) {
-      const redisConnected = await cacheService.isReady();
-      if (redisConnected) {
-        checks.redis = { status: 'healthy' };
-      } else {
-        checks.redis = {
-          status: 'unhealthy',
-          message: 'Redis connection not available',
-        };
-        // Redis is optional, so don't fail readiness check
-      }
-    } else {
-      checks.redis = { status: 'not_configured' };
-    }
-  } catch (error) {
-    logger.error('Redis health check failed', { error: error.message });
-    checks.redis = {
-      status: 'unhealthy',
-      message: error.message,
-    };
-    // Redis is optional, so don't fail readiness check
-  }
+  // Cache is in-memory only (no Redis in admin dashboard)
+  checks.cache = { status: 'healthy', message: 'in-memory' };
 
   // Check memory usage
   const memoryUsage = process.memoryUsage();

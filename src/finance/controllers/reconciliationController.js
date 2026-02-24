@@ -1,5 +1,6 @@
 const reconciliationService = require('../services/reconciliationService');
 const { asyncHandler } = require('../../core/middleware');
+const cacheInvalidation = require('../cacheInvalidation');
 
 class ReconciliationController {
   getReconSummary = asyncHandler(async (req, res) => {
@@ -17,6 +18,7 @@ class ReconciliationController {
   runReconciliation = asyncHandler(async (req, res) => {
     const { date, gateways } = req.body;
     const run = await reconciliationService.runReconciliation(date, gateways);
+    await cacheInvalidation.invalidateFinance().catch(() => {});
     res.status(201).json({ success: true, data: run });
   });
 
@@ -29,6 +31,7 @@ class ReconciliationController {
   investigateException = asyncHandler(async (req, res) => {
     const { id } = req.params;
     const exception = await reconciliationService.investigateException(id);
+    await cacheInvalidation.invalidateFinance().catch(() => {});
     res.json({ success: true, data: exception });
   });
 
@@ -36,6 +39,7 @@ class ReconciliationController {
     const { id } = req.params;
     const { resolutionType, note } = req.body;
     const exception = await reconciliationService.resolveException(id, resolutionType, note);
+    await cacheInvalidation.invalidateFinance().catch(() => {});
     res.json({ success: true, data: exception });
   });
 

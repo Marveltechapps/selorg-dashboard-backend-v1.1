@@ -1,4 +1,6 @@
 const express = require('express');
+const { authenticateToken, requireRole, cacheMiddleware } = require('../../core/middleware');
+const appConfig = require('../../config/app');
 const authRoutes = require('./authRoutes');
 const merchRoutes = require('./merchRoutes');
 const catalogRoutes = require('./catalogRoutes');
@@ -11,15 +13,21 @@ const complianceRoutes = require('./complianceRoutes');
 
 const router = express.Router();
 
-// Mount all merch & promo dashboard routes
+// Auth (login only) - no JWT required
 router.use('/auth', authRoutes);
-router.use('/', merchRoutes);
-router.use('/catalog', catalogRoutes);
-router.use('/pricing', pricingRoutes);
-router.use('/allocation', allocationRoutes);
-router.use('/geofence', geofenceRoutes);
-router.use('/analytics', analyticsRoutes);
-router.use('/alerts', alertRoutes);
-router.use('/compliance', complianceRoutes);
+
+// All other routes require JWT and role: merch, admin, super_admin; cache GET responses
+const protectedRouter = express.Router();
+protectedRouter.use(authenticateToken, requireRole('merch', 'admin', 'super_admin'));
+protectedRouter.use(cacheMiddleware(appConfig.cache.merch));
+protectedRouter.use('/', merchRoutes);
+protectedRouter.use('/catalog', catalogRoutes);
+protectedRouter.use('/pricing', pricingRoutes);
+protectedRouter.use('/allocation', allocationRoutes);
+protectedRouter.use('/geofence', geofenceRoutes);
+protectedRouter.use('/analytics', analyticsRoutes);
+protectedRouter.use('/alerts', alertRoutes);
+protectedRouter.use('/compliance', complianceRoutes);
+router.use(protectedRouter);
 
 module.exports = router;

@@ -1,12 +1,13 @@
 const express = require('express');
 const router = express.Router();
+const { authenticateToken, requireRole, cacheMiddleware } = require('../../core/middleware');
+const appConfig = require('../../config/app');
 
 // Import all warehouse routes
 const authRoutes = require('./authRoutes');
 const warehouseRoutes = require('./warehouseRoutes');
 const inboundRoutes = require('./inboundRoutes');
 const outboundRoutes = require('./outboundRoutes');
-// const inventoryRoutes = require('./inventoryRoutes'); // Commented out - controller missing
 const transfersRoutes = require('./transfersRoutes');
 const qcRoutes = require('./qcRoutes');
 const workforceRoutes = require('./workforceRoutes');
@@ -17,20 +18,25 @@ const utilitiesRoutes = require('./utilitiesRoutes');
 const orderRoutes = require('./orderRoutes');
 const staffRoutes = require('./staffRoutes');
 
-// Mount all routes
+// Auth (login only) - no JWT required
 router.use('/auth', authRoutes);
-router.use('/', warehouseRoutes);
-router.use('/inbound', inboundRoutes);
-router.use('/outbound', outboundRoutes);
-// router.use('/inventory', inventoryRoutes); // Commented out - controller missing
-router.use('/transfers', transfersRoutes);
-router.use('/qc', qcRoutes);
-router.use('/workforce', workforceRoutes);
-router.use('/equipment', equipmentRoutes);
-router.use('/exceptions', exceptionsRoutes);
-router.use('/reports', warehouseReportsRoutes);
-router.use('/utilities', utilitiesRoutes);
-router.use('/orders', orderRoutes);
-router.use('/staff', staffRoutes);
+
+// All other routes require JWT and role: warehouse, admin, super_admin; cache GET responses
+const protectedRouter = express.Router();
+protectedRouter.use(authenticateToken, requireRole('warehouse', 'admin', 'super_admin'));
+protectedRouter.use(cacheMiddleware(appConfig.cache.warehouse));
+protectedRouter.use('/', warehouseRoutes);
+protectedRouter.use('/inbound', inboundRoutes);
+protectedRouter.use('/outbound', outboundRoutes);
+protectedRouter.use('/transfers', transfersRoutes);
+protectedRouter.use('/qc', qcRoutes);
+protectedRouter.use('/workforce', workforceRoutes);
+protectedRouter.use('/equipment', equipmentRoutes);
+protectedRouter.use('/exceptions', exceptionsRoutes);
+protectedRouter.use('/reports', warehouseReportsRoutes);
+protectedRouter.use('/utilities', utilitiesRoutes);
+protectedRouter.use('/orders', orderRoutes);
+protectedRouter.use('/staff', staffRoutes);
+router.use(protectedRouter);
 
 module.exports = router;

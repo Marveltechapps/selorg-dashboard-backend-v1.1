@@ -3,7 +3,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'change-me';
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '1h';
 
 async function registerUser(payload) {
   const { email, password, name, role } = payload;
@@ -24,14 +24,15 @@ async function authenticateUser(email, password, role) {
   const user = await User.findOne({ email: normalizedEmail });
   if (!user) return null;
   
-  // If role is specified, verify it matches
-  if (role && user.role !== role) return null;
+  // If role is specified, verify it matches (case-insensitive)
+  if (role && user.role && user.role.toLowerCase().trim() !== role.toLowerCase().trim()) return null;
   
   const ok = await bcrypt.compare(password, user.password);
   if (!ok) return null;
   
+  const roleNormalized = (user.role && typeof user.role === 'string') ? user.role.toLowerCase().trim() : (user.role || '');
   const token = jwt.sign(
-    { id: user._id.toString(), email: user.email, role: user.role },
+    { id: user._id.toString(), userId: user._id.toString(), email: user.email, role: roleNormalized },
     JWT_SECRET,
     { expiresIn: JWT_EXPIRES_IN }
   );

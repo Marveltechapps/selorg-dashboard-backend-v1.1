@@ -1,4 +1,5 @@
 const express = require('express');
+const { authenticateToken, requireRole } = require('../../core/middleware');
 const authRoutes = require('./authRoutes');
 const roleRoutes = require('./roleRoutes');
 const permissionRoutes = require('./permissionRoutes');
@@ -9,21 +10,18 @@ const cacheRoutes = require('./cacheRoutes');
 
 const router = express.Router();
 
-// Mount auth routes
+// Auth (login only) - no JWT required
 router.use('/auth', authRoutes);
 
-// RBAC Management Routes
-router.use('/roles', roleRoutes);
-router.use('/permissions', permissionRoutes);
-router.use('/users', userRoutes);
-
-// Store & Warehouse Management
-router.use('/', storeWarehouseRoutes);
-
-// Audit Logs
-router.use('/audit', auditLogsRoutes);
-
-// Cache stats (Redis keys count, memory) - secure in production
-router.use('/cache', cacheRoutes);
+// All other routes require JWT and role: admin, super_admin
+const protectedRouter = express.Router();
+protectedRouter.use(authenticateToken, requireRole('admin', 'super_admin'));
+protectedRouter.use('/roles', roleRoutes);
+protectedRouter.use('/permissions', permissionRoutes);
+protectedRouter.use('/users', userRoutes);
+protectedRouter.use('/', storeWarehouseRoutes);
+protectedRouter.use('/audit', auditLogsRoutes);
+protectedRouter.use('/cache', cacheRoutes);
+router.use(protectedRouter);
 
 module.exports = router;

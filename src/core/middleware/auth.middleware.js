@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const logger = require('../utils/logger');
 const { ErrorResponse } = require('../utils/ErrorResponse');
+const tokenBlocklist = require('../services/tokenBlocklist');
 
 /**
  * Validates JWT secret on startup
@@ -60,6 +61,21 @@ const authenticateToken = (req, res, next) => {
 
     try {
       const decoded = jwt.verify(token, jwtSecret);
+
+      if (tokenBlocklist.has(token)) {
+        res.status(403).json({
+          success: false,
+          error: {
+            code: 'AUTH_TOKEN_REVOKED',
+            message: 'Token has been revoked. Please log in again.',
+          },
+          meta: {
+            requestId: req.id,
+            timestamp: new Date().toISOString(),
+          },
+        });
+        return;
+      }
 
       // Attach user to request object
       req.user = {

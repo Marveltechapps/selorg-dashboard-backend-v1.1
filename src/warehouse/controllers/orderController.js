@@ -1,6 +1,7 @@
 const orderService = require('../services/orderService');
 const cache = require('../../utils/cache');
 const logger = require('../../core/utils/logger');
+const cacheInvalidation = require('../cacheInvalidation');
 
 const listOrders = async (req, res, next) => {
   try {
@@ -43,6 +44,7 @@ const assignOrder = async (req, res, next) => {
     await cache.del(`rider:${riderId}`);
     await cache.del('distribution');
     await cache.delByPattern('dashboard:*');
+    await cacheInvalidation.invalidateWarehouse().catch(() => {});
     
     res.status(200).json(order);
   } catch (error) {
@@ -80,6 +82,7 @@ const alertOrder = async (req, res, next) => {
     // Invalidate cache
     await cache.delByPattern('orders:*');
     await cache.delByPattern('alerts:*');
+    await cacheInvalidation.invalidateWarehouse().catch(() => {});
     
     res.status(200).json(result);
   } catch (error) {

@@ -1,5 +1,6 @@
 const accountingService = require('../services/accountingService');
 const { asyncHandler } = require('../../core/middleware');
+const cacheInvalidation = require('../cacheInvalidation');
 
 class AccountingController {
   getAccountingSummary = asyncHandler(async (req, res) => {
@@ -20,6 +21,7 @@ class AccountingController {
 
   createJournalEntry = asyncHandler(async (req, res) => {
     const journalEntry = await accountingService.createJournalEntry(req.body);
+    await cacheInvalidation.invalidateFinance().catch(() => {});
     res.status(201).json({ success: true, data: journalEntry });
   });
 

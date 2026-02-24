@@ -1,5 +1,6 @@
 const financeAlertsService = require('../services/financeAlertsService');
 const { asyncHandler } = require('../../core/middleware');
+const cacheInvalidation = require('../cacheInvalidation');
 
 class FinanceAlertsController {
   getAlerts = asyncHandler(async (req, res) => {
@@ -21,11 +22,13 @@ class FinanceAlertsController {
   performAlertAction = asyncHandler(async (req, res) => {
     const { id } = req.params;
     const alert = await financeAlertsService.performAlertAction(id, req.body);
+    await cacheInvalidation.invalidateFinance().catch(() => {});
     res.json({ success: true, data: alert });
   });
 
   clearResolvedAlerts = asyncHandler(async (req, res) => {
     await financeAlertsService.clearResolvedAlerts();
+    await cacheInvalidation.invalidateFinance().catch(() => {});
     res.json({ success: true, message: 'Resolved alerts cleared' });
   });
 }

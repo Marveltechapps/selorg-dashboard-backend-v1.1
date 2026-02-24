@@ -19,6 +19,12 @@ All customer app data uses the following namespaced collections:
 | `customer_home_sections`  | HomeSection – home sections and product refs |
 | `customer_lifestyle_items`| LifestyleItem – lifestyle block content |
 | `customer_promo_blocks`   | PromoBlock – promo blocks by key |
+| `customer_addresses`     | CustomerAddress – user addresses |
+| `customer_carts`         | Cart – user cart (items) |
+| `customer_orders`        | Order – customer orders |
+| `customer_payment_methods` | PaymentMethod – saved payment methods |
+| `customer_coupons`       | Coupon – discount codes |
+| `customer_notifications` | Notification – in-app notifications |
 
 These collections are separate from HHD (`User`, etc.) and Picker (`PickerUser`, etc.) to avoid model name clashes in the same process.
 
@@ -28,8 +34,16 @@ These collections are separate from HHD (`User`, etc.) and Picker (`PickerUser`,
 - `/api/v1/customer/auth` – send-otp, verify-otp, resend-otp
 - `/api/v1/customer/home` – home payload
 - `/api/v1/customer/products/:id` – product detail
-- `/api/v1/customer/user/profile` – user profile (auth required)
-- `/api/v1/customer/admin/home` – admin CRUD for categories, banners, config, sections, lifestyle, promoblocks
+- `/api/v1/customer/user/profile` – user profile GET/PUT (auth required)
+- `/api/v1/customer/user/change-password` – PUT body: currentPassword, newPassword (auth required)
+- `/api/v1/customer/addresses` – list, default, create, update, delete, setDefault (auth required)
+- `/api/v1/customer/cart` – get, add item, update item, remove item, clear (auth required)
+- `/api/v1/customer/orders` – list, detail, create, cancel, status, rate (auth required)
+- `/api/v1/customer/payments/methods` – list, add, remove, set default (auth required)
+- `/api/v1/customer/coupons` – list (public), validate (POST body: code, orderAmount), apply (auth, POST body: code, orderAmount)
+- `/api/v1/customer/notifications` – list, mark read (PUT /:id/read), mark all read (PUT /read-all) (auth required)
+- `/api/v1/customer/legal` – config, terms, privacy, accept
+- `/api/v1/customer/admin/home` – admin CRUD (dashboard JWT + role admin/super_admin) for categories, banners, config, sections, lifestyle, promoblocks, products
 - `/api/v1/customer/health` – health check
 
 ## Environment

@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const bulkOperationsController = require('../controllers/bulkOperationsController');
-const { authenticateToken } = require('../../core/middleware');
+const { authenticateToken, cacheMiddleware } = require('../../core/middleware');
+const appConfig = require('../../config/app');
 
 /**
  * Bulk Operations Routes
@@ -20,7 +21,7 @@ router.post('/inventory', authenticateToken, bulkOperationsController.bulkUpdate
 router.post('/import/products', authenticateToken, bulkOperationsController.bulkImportProducts);
 
 // GET /api/v1/shared/bulk/export/:type - Bulk export data
-router.get('/export/:type', authenticateToken, bulkOperationsController.bulkExport);
+router.get('/export/:type', authenticateToken, cacheMiddleware(appConfig.cache.bulk), bulkOperationsController.bulkExport);
 
 // DELETE /api/v1/shared/bulk/:type - Bulk delete
 router.delete('/:type', authenticateToken, bulkOperationsController.bulkDelete);

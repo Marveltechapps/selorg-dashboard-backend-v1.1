@@ -20,7 +20,7 @@ const AuditLogSchema = new Schema(
     userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      required: true,
+      required: false, // optional for auth events (e.g. login_failure)
     },
     severity: {
       type: String,

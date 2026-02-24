@@ -14,11 +14,20 @@ const adminHomeRoutes = require('./routes/admin/homeAdminRoutes');
 const userRoutes = require('./routes/userRoutes');
 const legalRoutes = require('./routes/legalRoutes');
 const addressRoutes = require('./routes/addressRoutes');
+const cartRoutes = require('./routes/cartRoutes');
+const ordersRoutes = require('./routes/ordersRoutes');
+const paymentsRoutes = require('./routes/paymentsRoutes');
+const couponsRoutes = require('./routes/couponsRoutes');
+const notificationsRoutes = require('./routes/notificationsRoutes');
 
 const app = express();
 
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
+
+const { cacheMiddleware } = require('../core/middleware');
+const appConfig = require('../config/app');
+app.use(cacheMiddleware(appConfig.cache.customer.default));
 
 app.use('/onboarding', onboardingRoutes);
 app.use('/auth', authRoutes);
@@ -29,6 +38,11 @@ app.use('/admin/home', adminHomeRoutes);
 app.use('/user', userRoutes);
 app.use('/legal', legalRoutes);
 app.use('/addresses', addressRoutes);
+app.use('/cart', cartRoutes);
+app.use('/orders', ordersRoutes);
+app.use('/payments', paymentsRoutes);
+app.use('/coupons', couponsRoutes);
+app.use('/notifications', notificationsRoutes);
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true });

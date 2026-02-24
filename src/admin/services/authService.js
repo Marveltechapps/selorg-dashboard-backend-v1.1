@@ -5,7 +5,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'change-me';
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '1h';
 
 async function registerUser(payload) {
   const { email, password, name, role } = payload;
@@ -35,10 +35,18 @@ async function authenticateUser(email, password, role) {
   
   console.log('User found:', { email: user.email, role: user.role, hasPassword: !!user.password });
   
-  // If role is specified, verify it matches (case-insensitive)
-  if (role && user.role && user.role.toLowerCase() !== role.toLowerCase()) {
-    console.log('Role mismatch:', { userRole: user.role, requestedRole: role });
-    return null;
+  // If role is specified, verify it matches (case-insensitive).
+  // super_admin can log in as "admin" (or any dashboard) since they have access to all.
+  const userRoleLower = user.role && user.role.toLowerCase().trim();
+  const requestedRoleLower = role && role.toLowerCase().trim();
+  if (role && user.role) {
+    const roleMatches =
+      userRoleLower === requestedRoleLower ||
+      (userRoleLower === 'super_admin' && requestedRoleLower === 'admin');
+    if (!roleMatches) {
+      console.log('Role mismatch:', { userRole: user.role, requestedRole: role });
+      return null;
+    }
   }
   
   const ok = await bcrypt.compare(password, user.password);
@@ -86,12 +94,13 @@ async function authenticateUser(email, password, role) {
     console.warn('Could not update lastLogin:', err.message);
   }
   
+  const roleNormalized = (user.role && typeof user.role === 'string') ? user.role.toLowerCase().trim() : (user.role || '');
   const token = jwt.sign(
     { 
       id: user._id.toString(),
       userId: user._id.toString(),
       email: user.email, 
-      role: user.role,
+      role: roleNormalized,
       roleId: user.roleId?._id?.toString() || user.roleId?.toString() || null,
       permissions: permissions
     },

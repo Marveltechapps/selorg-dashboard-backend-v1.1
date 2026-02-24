@@ -1,5 +1,7 @@
 const express = require('express');
 const router = express.Router();
+const { authenticateToken, requireRole, cacheMiddleware } = require('../../core/middleware');
+const appConfig = require('../../config/app');
 
 // Import all darkstore routes
 const authRoutes = require('./authRoutes');
@@ -20,23 +22,29 @@ const hsdRoutes = require('./hsdRoutes');
 const utilitiesRoutes = require('./utilitiesRoutes');
 const settingsRoutes = require('./settingsRoutes');
 
-// Mount all routes under /darkstore prefix
+// Auth (login only) - no JWT required
 router.use('/auth', authRoutes);
-router.use('/dashboard', dashboardRoutes);
-router.use('/inventory', inventoryRoutes);
-router.use('/orders', orderRoutes);
-router.use('/picklists', picklistRoutes);
-router.use('/pickers', pickerRoutes);
-router.use('/packing', packingRoutes);
-router.use('/inbound', inboundRoutes);
-router.use('/outbound', outboundRoutes);
-router.use('/qc', qcRoutes);
-router.use('/health', healthRoutes);
-router.use('/staff', staffRoutes);
-router.use('/alerts', alertRoutes);
-router.use('/analytics', analyticsRoutes);
-router.use('/hsd', hsdRoutes);
-router.use('/utilities', utilitiesRoutes);
-router.use('/settings', settingsRoutes);
+
+// All other routes require JWT and role: darkstore, admin, super_admin; cache GET responses
+const protectedRouter = express.Router();
+protectedRouter.use(authenticateToken, requireRole('darkstore', 'admin', 'super_admin'));
+protectedRouter.use(cacheMiddleware(appConfig.cache.darkstore));
+protectedRouter.use('/dashboard', dashboardRoutes);
+protectedRouter.use('/inventory', inventoryRoutes);
+protectedRouter.use('/orders', orderRoutes);
+protectedRouter.use('/picklists', picklistRoutes);
+protectedRouter.use('/pickers', pickerRoutes);
+protectedRouter.use('/packing', packingRoutes);
+protectedRouter.use('/inbound', inboundRoutes);
+protectedRouter.use('/outbound', outboundRoutes);
+protectedRouter.use('/qc', qcRoutes);
+protectedRouter.use('/health', healthRoutes);
+protectedRouter.use('/staff', staffRoutes);
+protectedRouter.use('/alerts', alertRoutes);
+protectedRouter.use('/analytics', analyticsRoutes);
+protectedRouter.use('/hsd', hsdRoutes);
+protectedRouter.use('/utilities', utilitiesRoutes);
+protectedRouter.use('/settings', settingsRoutes);
+router.use(protectedRouter);
 
 module.exports = router;

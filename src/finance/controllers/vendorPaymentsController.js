@@ -1,5 +1,6 @@
 const vendorPaymentsService = require('../services/vendorPaymentsService');
 const { asyncHandler } = require('../../core/middleware');
+const cacheInvalidation = require('../cacheInvalidation');
 
 class VendorPaymentsController {
   getPayablesSummary = asyncHandler(async (req, res) => {
@@ -21,6 +22,7 @@ class VendorPaymentsController {
   approveInvoice = asyncHandler(async (req, res) => {
     const { id } = req.params;
     const invoice = await vendorPaymentsService.approveInvoice(id);
+    await cacheInvalidation.invalidateFinance().catch(() => {});
     res.json({ success: true, data: invoice });
   });
 
@@ -28,22 +30,26 @@ class VendorPaymentsController {
     const { id } = req.params;
     const { reason } = req.body;
     const invoice = await vendorPaymentsService.rejectInvoice(id, reason);
+    await cacheInvalidation.invalidateFinance().catch(() => {});
     res.json({ success: true, data: invoice });
   });
 
   markInvoicePaid = asyncHandler(async (req, res) => {
     const { id } = req.params;
     const invoice = await vendorPaymentsService.markInvoicePaid(id);
+    await cacheInvalidation.invalidateFinance().catch(() => {});
     res.json({ success: true, data: invoice });
   });
 
   uploadInvoice = asyncHandler(async (req, res) => {
     const invoice = await vendorPaymentsService.uploadInvoice(req.body);
+    await cacheInvalidation.invalidateFinance().catch(() => {});
     res.status(201).json({ success: true, data: invoice });
   });
 
   createPayment = asyncHandler(async (req, res) => {
     const result = await vendorPaymentsService.createPayment(req.body);
+    await cacheInvalidation.invalidateFinance().catch(() => {});
     res.status(201).json({ success: true, data: result });
   });
 

@@ -2,6 +2,7 @@ const Store = require('../../merch/models/Store');
 const Staff = require('../../warehouse/models/Staff');
 const { asyncHandler } = require('../../core/middleware');
 const ErrorResponse = require('../../core/utils/ErrorResponse');
+const cacheInvalidation = require('../cacheInvalidation');
 
 const storeWarehouseController = {
   // Stores
@@ -20,6 +21,7 @@ const storeWarehouseController = {
 
   createStore: asyncHandler(async (req, res) => {
     const store = await Store.create(req.body);
+    await cacheInvalidation.invalidateStores().catch(() => {});
     res.status(201).json({ success: true, data: store });
   }),
 
@@ -28,6 +30,7 @@ const storeWarehouseController = {
     if (!store) {
       throw new ErrorResponse('Store not found', 404);
     }
+    await cacheInvalidation.invalidateStores().catch(() => {});
     res.json({ success: true, data: store });
   }),
 
@@ -36,6 +39,7 @@ const storeWarehouseController = {
     if (!store) {
       throw new ErrorResponse('Store not found', 404);
     }
+    await cacheInvalidation.invalidateStores().catch(() => {});
     res.json({ success: true, message: 'Store deleted' });
   }),
 
@@ -64,6 +68,7 @@ const storeWarehouseController = {
 
   createStaff: asyncHandler(async (req, res) => {
     const staff = await Staff.create(req.body);
+    await cacheInvalidation.invalidateStaff().catch(() => {});
     res.status(201).json({ success: true, data: staff });
   }),
 
@@ -72,6 +77,7 @@ const storeWarehouseController = {
     if (!staff) {
       throw new ErrorResponse('Staff not found', 404);
     }
+    await cacheInvalidation.invalidateStaff().catch(() => {});
     res.json({ success: true, data: staff });
   }),
 
@@ -80,6 +86,7 @@ const storeWarehouseController = {
     if (!staff) {
       throw new ErrorResponse('Staff not found', 404);
     }
+    await cacheInvalidation.invalidateStaff().catch(() => {});
     res.json({ success: true, message: 'Staff deleted' });
   }),
 

@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const workflowAutomationController = require('../controllers/workflowAutomationController');
-const { authenticateToken } = require('../../core/middleware');
+const { authenticateToken, cacheMiddleware } = require('../../core/middleware');
+const appConfig = require('../../config/app');
 
 /**
  * Workflow Automation Routes
@@ -17,6 +18,6 @@ router.post('/trigger', authenticateToken, workflowAutomationController.triggerA
 router.post('/schedule', authenticateToken, workflowAutomationController.scheduleTask);
 
 // GET /api/v1/shared/automation/rules - Get all rules
-router.get('/rules', authenticateToken, workflowAutomationController.getRules);
+router.get('/rules', authenticateToken, cacheMiddleware(appConfig.cache.automation), workflowAutomationController.getRules);
 
 module.exports = router;

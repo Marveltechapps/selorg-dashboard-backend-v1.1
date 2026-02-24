@@ -12,6 +12,7 @@ const userSchema = new mongoose.Schema(
     acceptedTermsAt: { type: Date, default: null },
     acceptedPrivacyVersion: { type: String, default: null },
     acceptedPrivacyAt: { type: Date, default: null },
+    passwordHash: { type: String, default: null },
     meta: { type: mongoose.Schema.Types.Mixed, default: {} },
   },
   { timestamps: true }

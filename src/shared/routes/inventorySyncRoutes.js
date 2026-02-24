@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const inventorySyncController = require('../controllers/inventorySyncController');
-const { authenticateToken } = require('../../core/middleware');
+const { authenticateToken, cacheMiddleware } = require('../../core/middleware');
+const appConfig = require('../../config/app');
 
 /**
  * Real-time Inventory Sync Routes
@@ -17,6 +18,6 @@ router.post('/store-to-warehouse', authenticateToken, inventorySyncController.sy
 router.post('/bulk', authenticateToken, inventorySyncController.bulkSync);
 
 // GET /api/v1/shared/inventory-sync/status - Get sync status
-router.get('/status', authenticateToken, inventorySyncController.getSyncStatus);
+router.get('/status', authenticateToken, cacheMiddleware(appConfig.cache.inventorySync), inventorySyncController.getSyncStatus);
 
 module.exports = router;

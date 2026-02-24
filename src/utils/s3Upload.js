@@ -120,10 +120,22 @@ async function uploadRiderProfileImage(userId, base64Data) {
   return uploadBase64ImageToS3(base64Data, bucket, folder);
 }
 
+/**
+ * Upload product image (catalog)
+ * @param {string} base64Data - Base64 encoded image (with or without data URI prefix)
+ * @returns {Promise<string>} - S3 URL
+ */
+async function uploadProductImage(base64Data) {
+  const bucket = process.env.AWS_S3_BUCKET_PRODUCT_IMAGES || 'selorg-product-images';
+  const folder = 'products';
+  return uploadBase64ImageToS3(base64Data, bucket, folder);
+}
+
 module.exports = {
   uploadBase64ImageToS3,
   uploadBufferToS3,
   uploadPickerProfileImage,
   uploadRiderProfileImage,
+  uploadProductImage,
   s3Client,
 };

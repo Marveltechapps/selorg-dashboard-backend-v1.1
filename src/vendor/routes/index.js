@@ -1,5 +1,7 @@
 const express = require('express');
 const router = express.Router();
+const { authenticateToken, requireRole, cacheMiddleware } = require('../../core/middleware');
+const appConfig = require('../../config/app');
 
 // Import all vendor routes
 const authRoutes = require('./authRoutes');
@@ -13,17 +15,23 @@ const webhooksRoutes = require('./webhooksRoutes');
 const reportsRoutes = require('./reportsRoutes');
 const qcComplianceRoutes = require('./qcComplianceRoutes');
 
-// Mount all routes
+// Auth (login only) - no JWT required
 router.use('/auth', authRoutes);
-router.use('/vendors', vendorRoutes);
-router.use('/inbound', inboundRoutes);
-router.use('/inventory', inventoryRoutes);
-router.use('/purchase-orders', purchaseOrderRoutes);
-router.use('/qc', qcRoutes);
-router.use('/', certificatesRoutes); // Certificates routes already have /vendors/:vendorId/certificates prefix
-router.use('/webhooks', webhooksRoutes);
-router.use('/reports', reportsRoutes);
-router.use('/qc-compliance', qcComplianceRoutes);
-router.use('/system-gateway', require('./systemGatewayRoutes'));
+
+// All other routes require JWT and role: vendor, admin, super_admin; cache GET responses
+const protectedRouter = express.Router();
+protectedRouter.use(authenticateToken, requireRole('vendor', 'admin', 'super_admin'));
+protectedRouter.use(cacheMiddleware(appConfig.cache.vendor));
+protectedRouter.use('/vendors', vendorRoutes);
+protectedRouter.use('/inbound', inboundRoutes);
+protectedRouter.use('/inventory', inventoryRoutes);
+protectedRouter.use('/purchase-orders', purchaseOrderRoutes);
+protectedRouter.use('/qc', qcRoutes);
+protectedRouter.use('/', certificatesRoutes);
+protectedRouter.use('/webhooks', webhooksRoutes);
+protectedRouter.use('/reports', reportsRoutes);
+protectedRouter.use('/qc-compliance', qcComplianceRoutes);
+protectedRouter.use('/system-gateway', require('./systemGatewayRoutes'));
+router.use(protectedRouter);
 
 module.exports = router;

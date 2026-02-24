@@ -1,4 +1,5 @@
-const { HomeConfig } = require('../models/HomeConfig');
+const { HomeConfig, DEFAULT_SECTION_DEFINITIONS } = require('../models/HomeConfig');
+const { HomeSectionDefinition } = require('../models/HomeSectionDefinition');
 const { Category } = require('../models/Category');
 const { Banner } = require('../models/Banner');
 const { HomeSection } = require('../models/HomeSection');
@@ -18,12 +19,20 @@ async function resolveProducts(productIds = []) {
 
 async function getHomePayload(req = {}) {
   const config = await HomeConfig.findOne({ key: 'main' }).lean();
-  const categories = await Category.find({
-    isActive: true,
-    parentId: { $in: [null, undefined] },
-  })
-  .sort({ order: 1 })
-  .lean();
+  let categories;
+  if (config && Array.isArray(config.categoryIds) && config.categoryIds.length > 0) {
+    const ids = config.categoryIds.map((id) => (typeof id === 'object' && id && id._id ? id._id : id));
+    const found = await Category.find({ _id: { $in: ids }, isActive: true }).lean();
+    const orderMap = new Map(ids.map((id, i) => [String(id), i]));
+    categories = found.sort((a, b) => (orderMap.get(String(a._id)) ?? 99) - (orderMap.get(String(b._id)) ?? 99));
+  } else {
+    categories = await Category.find({
+      isActive: true,
+      parentId: { $in: [null, undefined] },
+    })
+      .sort({ order: 1 })
+      .lean();
+  }
   const heroBanners = await Banner.find({ slot: 'hero', isActive: true }).sort({ order: 1 }).lean();
   const midBanners = await Banner.find({ slot: 'mid', isActive: true }).sort({ order: 1 }).lean();
   const sectionsDocs = await HomeSection.find({ isActive: true }).lean();
@@ -45,8 +54,15 @@ async function getHomePayload(req = {}) {
     defaultAddress = await getDefaultAddress(userId);
   }
 
+  const definitionsFromCollection = await HomeSectionDefinition.find().sort({ order: 1 }).lean();
+  const sectionDefinitions =
+    definitionsFromCollection.length > 0
+      ? definitionsFromCollection.map((d) => ({ key: d.key, label: d.label || d.key }))
+      : DEFAULT_SECTION_DEFINITIONS;
+  const configWithDefaults = config ? { ...config, sectionDefinitions } : null;
+
   return {
-    config: config || null,
+    config: configWithDefaults,
     categories: categories || [],
     heroBanners: heroBanners || [],
     midBanners: midBanners || [],

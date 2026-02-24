@@ -51,6 +51,10 @@ function requireDb(req, res, next) {
 
 app.use(requireDb);
 
+const { cacheMiddleware } = require('../core/middleware');
+const appConfig = require('../config/app');
+app.use(cacheMiddleware(appConfig.cache.picker.default));
+
 app.use('/auth', authRoutes);
 app.use('/users', userRoutes);
 app.use('/documents', documentsRoutes);

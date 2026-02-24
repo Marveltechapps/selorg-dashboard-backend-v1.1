@@ -1,5 +1,6 @@
 const customerPaymentsService = require('../services/customerPaymentsService');
 const { asyncHandler } = require('../../core/middleware');
+const cacheInvalidation = require('../cacheInvalidation');
 
 class CustomerPaymentsController {
   getCustomerPayments = asyncHandler(async (req, res) => {
@@ -17,6 +18,7 @@ class CustomerPaymentsController {
     const { id } = req.params;
     const { amount } = req.body;
     const payment = await customerPaymentsService.retryCustomerPayment(id, amount);
+    await cacheInvalidation.invalidateFinance().catch(() => {});
     res.json({ success: true, data: payment });
   });
 }

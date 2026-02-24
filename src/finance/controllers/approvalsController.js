@@ -1,5 +1,6 @@
 const approvalsService = require('../services/approvalsService');
 const { asyncHandler } = require('../../core/middleware');
+const cacheInvalidation = require('../cacheInvalidation');
 
 class ApprovalsController {
   getApprovalSummary = asyncHandler(async (req, res) => {
@@ -26,6 +27,7 @@ class ApprovalsController {
   submitTaskDecision = asyncHandler(async (req, res) => {
     const { id } = req.params;
     const task = await approvalsService.submitTaskDecision(id, req.body);
+    await cacheInvalidation.invalidateFinance().catch(() => {});
     res.json({ success: true, data: task });
   });
 }
