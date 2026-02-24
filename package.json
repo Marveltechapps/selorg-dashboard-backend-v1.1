@@ -10,6 +10,7 @@
     "seed:super-admin": "node scripts/seed-super-admin.js",
     "seed:hhd": "node scripts/seed-hhd-orders.js",
     "seed:customer-home": "node scripts/seedCustomerHome.js",
+    "seed:customer-onboarding": "node scripts/seedCustomerOnboarding.js",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
